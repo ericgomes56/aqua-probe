@@ -822,6 +822,66 @@ test_port_scanning_detection() {
 }
 
 
+# Block Non-compliant Images
+test_block_non_compliant_images() {
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Update the Assurance Policy to check for Malware
+        2. Ensure that the Assurance Policy blocks non-compliant images
+        3. Ensure that the Assurance Policy is applied to this Kubernetes environment"
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            print_colored_message yellow "Deploying non-compliant image test container..."
+            echo
+            kubectl delete deployment aqua-non-compliant-image-test --ignore-not-found
+            kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aqua-non-compliant-image-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aqua-non-compliant-image-test
+  template:
+    metadata:
+      labels:
+        app: aqua-non-compliant-image-test
+    spec:
+      containers:
+      - name: eicar
+        image: jerbi/eicar:latest
+        imagePullPolicy: Always
+        command:
+        - sleep
+        args:
+        - infinity
+EOF
+            echo
+            print_colored_message yellow "[!] Observe that the deployment or pod creation is blocked because the image is non-compliant."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console's Assurance and Risk Explorer screens to view the non-compliant image details."
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -905,10 +965,11 @@ main() {
         echo "10. Test File Block"
         echo "11. Test Package Block"
         echo "12. Test Port Scanning Detection"
-        echo "13. Terminate Program"
+        echo "13. Test Block Non-compliant Images"
+        echo "14. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-13): " choice
+        read -p "Enter your choice (1-14): " choice
 
         case $choice in
             1)
@@ -948,6 +1009,9 @@ main() {
                 test_port_scanning_detection
                 ;;
             13)
+                test_block_non_compliant_images
+                ;;
+            14)
                 terminate_program
                 ;;
         esac
