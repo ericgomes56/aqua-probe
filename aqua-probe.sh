@@ -882,6 +882,73 @@ EOF
 }
 
 
+# Block Unregistered Images
+test_block_unregistered_images() {
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Update the Assurance Policy to block unregistered images
+        2. Ensure that the Assurance Policy is applied to this Kubernetes environment
+        3. Ensure that 'Automatically registering running containers' is disabled in Global Settings
+        4. If using Kube-Enforcer, ensure that 'Registering discovered pod images' is disabled"
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            read -p "Enter an image to deploy for this test [default: $AQUA_PROBE_IMAGE]: " unregistered_image
+            if [ -z "$unregistered_image" ]; then
+                unregistered_image="$AQUA_PROBE_IMAGE"
+            fi
+
+            echo
+            print_colored_message yellow "Deploying unregistered image test container with image: $unregistered_image"
+            echo
+            kubectl delete deployment aqua-unregistered-image-test --ignore-not-found
+            kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aqua-unregistered-image-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aqua-unregistered-image-test
+  template:
+    metadata:
+      labels:
+        app: aqua-unregistered-image-test
+    spec:
+      containers:
+      - name: unregistered-image
+        image: $unregistered_image
+        imagePullPolicy: Always
+        command:
+        - sleep
+        args:
+        - infinity
+EOF
+            echo
+            print_colored_message yellow "[!] Observe that the deployment or pod creation is blocked because the image is unregistered."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console's Assurance and Risk Explorer screens to view the unregistered image details."
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -966,10 +1033,11 @@ main() {
         echo "11. Test Package Block"
         echo "12. Test Port Scanning Detection"
         echo "13. Test Block Non-compliant Images"
-        echo "14. Terminate Program"
+        echo "14. Test Block Unregistered Images"
+        echo "15. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-14): " choice
+        read -p "Enter your choice (1-15): " choice
 
         case $choice in
             1)
@@ -1012,6 +1080,9 @@ main() {
                 test_block_non_compliant_images
                 ;;
             14)
+                test_block_unregistered_images
+                ;;
+            15)
                 terminate_program
                 ;;
         esac
