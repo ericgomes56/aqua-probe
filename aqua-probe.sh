@@ -26,7 +26,7 @@ print_logo() {
 
 print_welcome_message() {
     echo "=========================================================================================="
-    echo "                    Welcome to Aqua Probe, the Aqua Runtime Security POV Tool                 "
+    echo "                    Welcome to Aqua Probe, the Aqua Security Runtime Input Validator Tool                 "
     echo "=========================================================================================="
     echo "                                                                                          "
     echo "     Explore various security features of Aqua Security with this interactive tool.       " 
