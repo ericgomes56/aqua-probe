@@ -284,17 +284,18 @@ test_realtime_malware_protection() {
     [Yy]*)
       if check_container_existence; then
         pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+        container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
         echo
         print_colored_message yellow "Executing 'ls -la' command in the container..."
         echo
-        kubectl exec -it $pod_name -- ls -la /tmp/
+        kubectl exec -it $pod_name --container $container_name -- ls -la /tmp/
         sleep 1.5
 
         # Create the eicar.txt file and write the concatenated string
         echo
         print_colored_message yellow "Creating and writing EICAR string to eicar.txt in the container..."
         echo
-        kubectl exec -it $pod_name -- bash -c "touch /tmp/eicar.txt && echo '$eicar_string' > /tmp/eicar.txt"
+        kubectl exec -it $pod_name --container $container_name -- bash -c "touch /tmp/eicar.txt && echo '$eicar_string' > /tmp/eicar.txt"
         if [ $? -eq 0 ]; then
           echo
           print_colored_message yellow "Eicar string written to file successfully."
@@ -309,7 +310,7 @@ test_realtime_malware_protection() {
         echo
         print_colored_message yellow "[!] Observe in the output below that the downloaded eicar file is not in sight because it has been deleted by Aqua."
         echo
-        kubectl exec -it $pod_name -- ls -la /tmp/
+        kubectl exec -it $pod_name --container $container_name -- ls -la /tmp/
         echo
         print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
 
@@ -348,21 +349,17 @@ test_drift_prevention() {
             # Make a copy of /bin/ls and execute the copy
             if check_container_existence; then
                 pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Copying '/bin/wget' to '/tmp/wget_copy' in the container..."
                 echo
-                echo "kubectl exec -it $pod_name -- cp /bin/wget /tmp/wget_copy"
-                kubectl exec -it $pod_name -- cp /bin/wget /tmp/wget_copy
-                if [ $? -ne 0 ]; then
-                    echo
-                    print_colored_message red "Failed to copy '/bin/wget' inside the Aqua test container. Please verify the pod is running and retry."
-                    return
-                fi
+                echo "kubectl exec -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy"
+                kubectl exec -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy
                 echo
                 print_colored_message yellow "Executing '/tmp/wget_copy' command in the container..."
                 echo
-                echo "kubectl exec -it $pod_name -- /tmp/wget_copy google.com"
-                kubectl exec -it $pod_name -- /tmp/wget_copy google.com
+                echo "kubectl exec -it $pod_name --container $container_name -- /tmp/wget_copy google.com"
+                kubectl exec -it $pod_name --container $container_name -- /tmp/wget_copy google.com
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -401,10 +398,11 @@ test_block_cryptocurrency_mining() {
             # Execute commands in the deployed container
             if check_container_existence; then
                 pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing 'wget us-east.cryptonight-hub.miningpoolhub.com:205' command in the container..."
                 echo
-                kubectl exec -it $pod_name -- wget us-east.cryptonight-hub.miningpoolhub.com:205
+                kubectl exec -it $pod_name --container $container_name -- wget us-east.cryptonight-hub.miningpoolhub.com:205
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -443,10 +441,11 @@ test_block_fileless_execution() {
             # Execute commands in the deployed container
             if check_container_existence; then
                 pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing './memrun MASTER_HACKER_PROCESS_NAME_1337 target' command in the container..."
                 echo
-                kubectl exec -it $pod_name -- ./tmp/memrun MASTER_HACKER_PROCESS_NAME_1337 /tmp/target
+                kubectl exec -it $pod_name --container $container_name -- ./tmp/memrun MASTER_HACKER_PROCESS_NAME_1337 /tmp/target
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
                 print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
@@ -543,12 +542,13 @@ test_executables_blocked() {
             # Execute commands in the deployed container
             if check_container_existence; then
                 pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing the blocked 'ps' command in the container..."
                 echo
-                echo "kubectl exec -it $pod_name -- bash -c ps"
+                echo "kubectl exec -it $pod_name --container $container_name -- bash -c ps"
                 echo
-                kubectl exec -it $pod_name -- bash -c "ps"
+                kubectl exec -it $pod_name --container $container_name -- bash -c "ps"
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -586,9 +586,10 @@ test_block_container_exec() {
             # Execute commands in the deployed container
             if check_container_existence; then
                 pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo "Executing shell session in the Aqua test application container..."
                 echo
-        kubectl exec -it $pod_name -- bash
+        kubectl exec -it $pod_name --container $container_name -- bash
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
