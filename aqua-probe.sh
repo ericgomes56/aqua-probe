@@ -1062,6 +1062,185 @@ test_system_integrity_monitoring() {
 }
 
 
+# Limit Container Privileges
+test_limit_container_privileges() {
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create a Custom Policy with Limit Container Privileges Control enabled
+        2. Ensure that the Custom Policy is set to 'Enforce' mode
+        3. Ensure that the policy blocks host namespaces, privileged mode, root user, and extra Linux capabilities"
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            print_colored_message yellow "Cleaning up previous Limit Container Privileges test pods..."
+            kubectl delete pod host-network-test cap-add-test root-user-test privileged-test host-ipc-test host-pid-test host-userns-test host-uts-test --ignore-not-found
+
+            echo
+            print_colored_message yellow "1. Access to host network - blocked by hostNetwork: true"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-network-test
+spec:
+  hostNetwork: true
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    command: ["sleep","3600"]
+EOF
+            echo "Verify: kubectl get pod host-network-test -o yaml | grep hostNetwork"
+
+            echo
+            print_colored_message yellow "2. Adding capabilities with --cap-add - blocked by extra Linux capabilities"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cap-add-test
+spec:
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      capabilities:
+        add:
+        - NET_ADMIN
+    command: ["sleep","3600"]
+EOF
+            echo "Common capabilities: SYS_ADMIN, NET_ADMIN, SYS_PTRACE, DAC_OVERRIDE"
+            echo "Verify: cat /proc/1/status | grep Cap"
+
+            echo
+            print_colored_message yellow "3. Configured with root user - blocked by running as UID 0"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: root-user-test
+spec:
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      runAsUser: 0
+    command: ["sleep","3600"]
+EOF
+            echo "Verify: id"
+            echo "Expected output: uid=0(root) gid=0(root)"
+
+            echo
+            print_colored_message yellow "4. Privileged containers - blocked by privileged mode"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-test
+spec:
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      privileged: true
+    command: ["sleep","3600"]
+EOF
+            echo "Verify: cat /proc/self/status | grep CapEff"
+
+            echo
+            print_colored_message yellow "5. Use the host IPC namespace - blocked by hostIPC: true"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-ipc-test
+spec:
+  hostIPC: true
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    command: ["sleep","3600"]
+EOF
+            echo "Verify: ipcs"
+
+            echo
+            print_colored_message yellow "6. Use the host PID namespace - blocked by hostPID: true"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-pid-test
+spec:
+  hostPID: true
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    command: ["sleep","3600"]
+EOF
+            echo "Verify: ps aux"
+
+            echo
+            print_colored_message yellow "7. Use the host user namespace - blocked by hostUsers: true"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-userns-test
+spec:
+  hostUsers: true
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    command: ["sleep","3600"]
+EOF
+            echo "Verify: cat /proc/self/uid_map"
+
+            echo
+            print_colored_message yellow "8. Use the host UTS namespace - blocked by hostNetwork or sharing UTS namespace"
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-uts-test
+spec:
+  hostNetwork: true
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    command: ["sleep","3600"]
+EOF
+            echo "Verify: hostname"
+
+            echo
+            print_colored_message yellow "[!] Observe that the pod deployments are blocked because they request disallowed container privileges."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -1149,10 +1328,11 @@ main() {
         echo "14. Test Block Unregistered Images"
         echo "15. Test File Integrity Monitoring"
         echo "16. Test System Integrity Monitoring"
-        echo "17. Terminate Program"
+        echo "17. Test Limit Container Privileges"
+        echo "18. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-17): " choice
+        read -p "Enter your choice (1-18): " choice
 
         case $choice in
             1)
@@ -1204,6 +1384,9 @@ main() {
                 test_system_integrity_monitoring
                 ;;
             17)
+                test_limit_container_privileges
+                ;;
+            18)
                 terminate_program
                 ;;
         esac
