@@ -217,7 +217,30 @@ deploy_test_container() {
     echo
     print_colored_message yellow "Deploying Aqua test container..."
     # Deploying the container using kubectl
-    kubectl create deployment aqua-test-container --image=$AQUA_PROBE_IMAGE -- sleep infinity
+    kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aqua-test-container
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aqua-test-container
+  template:
+    metadata:
+      labels:
+        app: aqua-test-container
+    spec:
+      containers:
+      - name: aqua-probe
+        image: $AQUA_PROBE_IMAGE
+        imagePullPolicy: Always
+        command:
+        - sleep
+        args:
+        - infinity
+EOF
 
     # Wait for the deployment to complete
     echo
@@ -485,7 +508,23 @@ test_reverse_shell() {
                 # Create a listener pod with nc listener
                 echo
                 print_colored_message yellow "Creating listener pod"
-                kubectl run listener --image=$AQUA_PROBE_IMAGE --command sleep infinity
+                kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: listener
+  labels:
+    run: listener
+spec:
+  containers:
+  - name: listener
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    command:
+    - sleep
+    args:
+    - infinity
+EOF
                 echo
                 print_colored_message yellow "Waiting for the listener container pod to start running..."
                 while ! kubectl get pods | grep listener | grep -q "Running"; do
