@@ -958,7 +958,7 @@ test_file_integrity_monitoring() {
         echo
         print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
         1. Create a Custom Policy with File Integrity Monitoring Control enabled
-        2. Add '/opt/app/config' to the monitored paths
+        2. Add '/etc/sudoers' and '/etc/backdoor.conf' to the monitored files
         3. Ensure that the Custom Policy is set to 'Enforce' mode
         4. Ensure that Block Container Exec Control is disabled"
         echo
@@ -976,31 +976,31 @@ test_file_integrity_monitoring() {
                 echo
                 cat <<'EOF'
 # Create a file
-echo "malicious change" > /opt/app/config/backdoor.conf
+echo "malicious change" > /etc/backdoor.conf
 
 # Modify an existing file
-echo "debug=true" >> /opt/app/config/app.conf
+echo "debug=true" >> /etc/sudoers
 
 # Change file permissions
-chmod 777 /opt/app/config/app.conf
+chmod 777 /etc/sudoers
 
 # Delete a file
-rm /opt/app/config/app.conf
+rm /etc/sudoers
 EOF
-                print_colored_message yellow "Preparing monitored directory and baseline file..."
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'mkdir -p /opt/app/config && touch /opt/app/config/app.conf'
+                print_colored_message yellow "Preparing baseline '/etc/sudoers' file..."
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'touch /etc/sudoers'
 
-                print_colored_message yellow "Creating '/opt/app/config/backdoor.conf'..."
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "malicious change" > /opt/app/config/backdoor.conf'
+                print_colored_message yellow "Creating '/etc/backdoor.conf'..."
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "malicious change" > /etc/backdoor.conf'
 
-                print_colored_message yellow "Modifying '/opt/app/config/app.conf'..."
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "debug=true" >> /opt/app/config/app.conf'
+                print_colored_message yellow "Modifying '/etc/sudoers'..."
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "debug=true" >> /etc/sudoers'
 
-                print_colored_message yellow "Changing permissions on '/opt/app/config/app.conf'..."
-                kubectl exec -it $pod_name --container $container_name -- chmod 777 /opt/app/config/app.conf
+                print_colored_message yellow "Changing permissions on '/etc/sudoers'..."
+                kubectl exec -it $pod_name --container $container_name -- chmod 777 /etc/sudoers
 
-                print_colored_message yellow "Deleting '/opt/app/config/app.conf'..."
-                kubectl exec -it $pod_name --container $container_name -- rm /opt/app/config/app.conf
+                print_colored_message yellow "Deleting '/etc/sudoers'..."
+                kubectl exec -it $pod_name --container $container_name -- rm /etc/sudoers
                 echo
                 print_colored_message yellow "[!] Observe that file create, modify, permission change, or delete activity was detected by Aqua."
                 echo
