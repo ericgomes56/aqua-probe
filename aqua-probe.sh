@@ -18,7 +18,7 @@ print_logo() {
     echo -e "                                                   *%%                                    "
     echo "                                                                                          "
     echo "                                                                                          "
-    echo "     Tool developed by: Stan Hoe, Solution Architect APJ                                       "
+    echo "     Tool developed by Eric Gomes, Senior DevSecOps Architect @ Aqua Security                                       "
     echo "                                                                                          "
     echo "                                                                                          "
 }
@@ -26,7 +26,7 @@ print_logo() {
 
 print_welcome_message() {
     echo "=========================================================================================="
-    echo "                    Welcome to Warden, the Aqua Runtime Security POV Tool                 "
+    echo "                    Welcome to Aqua Probe, the Aqua Runtime Security POV Tool                 "
     echo "=========================================================================================="
     echo "                                                                                          "
     echo "     Explore various security features of Aqua Security with this interactive tool.       " 
@@ -40,22 +40,22 @@ print_welcome_message() {
 # Flags management
 #
 print_help() {
-  echo "Usage: aqua-warden.sh [OPTIONS]"
+  echo "Usage: aqua-probe.sh [OPTIONS]"
   echo
   echo "Options:"
   echo "  --daemonset <value>, -d <value>         Set the custom daemonset name where the Aqua Enforcer is deployed (default: aqua-agent,kube-enforcer-ds)"
   echo "  --help, -h                              Show this help message and exit"
-  echo "  --image <value>, -i <value>             Set the aqua-warden test image name (default: stanhoe/aqua-warden:latest)"
+  echo "  --image <value>, -i <value>             Set the Aqua Probe test image name (default: ericgomes56/aqua-probe:1.0)"
   echo "  --namespace <value>, -ns <value>        Set the custom namespace where the Aqua Enforcer is deployed (default: aqua)"
   echo "  --no-instructions, -n                   Skip prerequisites instructions"
-  echo "  --version, -v                           Show the current Aqua Warden build version"
+  echo "  --version, -v                           Show the current Aqua Probe build version"
   echo
   echo
 }
 
 handle_flags() {
-  export AQUA_WARDEN_IMAGE="stanhoe/aqua-warden:latest"
-  export AQUA_WARDEN_NAMESPACE="aqua"
+  export AQUA_PROBE_IMAGE="ericgomes56/aqua-probe:1.0"
+  export AQUA_PROBE_NAMESPACE="aqua"
 
   while [[ $# -gt 0 ]]; do  # Loop until all arguments are processed
     case "$1" in
@@ -77,7 +77,7 @@ handle_flags() {
         if [[ $# -gt 0 ]]; then  # Ensure an image name is provided
           image_arg="$1"  # Store the image name
           echo "Detected --image flag with argument: $image_arg"
-          export AQUA_WARDEN_IMAGE=$image_arg
+          export AQUA_PROBE_IMAGE=$image_arg
           shift   # Shift again to consume the image name
         else
           echo "Error: --image flag requires an argument" >&2
@@ -86,7 +86,7 @@ handle_flags() {
         ;;
     # No instructions flag
       --no-instructions | -n)
-        export AQUA_WARDEN_SKIP_INSTRUCTIONS=1
+        export AQUA_PROBE_SKIP_INSTRUCTIONS=1
         echo "Detected --no-instructions flag"
         shift   # Shift to the next argument
         ;;
@@ -96,7 +96,7 @@ handle_flags() {
         if [[ $# -gt 0 ]]; then  # Ensure a namespace value is provided
           namespace_arg="$1"  # Store the namespace value
           echo "Detected --namespace flag with argument: $namespace_arg"
-          export AQUA_WARDEN_NAMESPACE=$namespace_arg
+          export AQUA_PROBE_NAMESPACE=$namespace_arg
           shift  # Shift again to consume the namespace value
         else
           echo "Error: --namespace flag requires an argument" >&2
@@ -109,7 +109,7 @@ handle_flags() {
         if [[ $# -gt 0 ]]; then  # Ensure a daemonset value is provided
           daemonset_arg="$1"  # Store the daemonset value
           echo "Detected --daemonset flag with argument: $daemonset_arg"
-          export AQUA_WARDEN_DAEMONSET=$daemonset_arg
+          export AQUA_PROBE_DAEMONSET=$daemonset_arg
           shift  # Shift again to consume the daemonset value
         else
           echo "Error: --daemonset flag requires an argument" >&2
@@ -174,16 +174,16 @@ check_aqua_agent_daemonset() {
     print_colored_message green "[✓] Done"
 
     # Check if aqua-agent daemonset exists in the aqua namespace
-    if kubectl get daemonset -n $AQUA_WARDEN_NAMESPACE aqua-agent &>/dev/null; then
+    if kubectl get daemonset -n $AQUA_PROBE_NAMESPACE aqua-agent &>/dev/null; then
         print_colored_message green "✓ Aqua Enforcer daemonset found"
         echo
-    elif kubectl get daemonset -n $AQUA_WARDEN_NAMESPACE aqua-enforcer-ds &>/dev/null; then
+    elif kubectl get daemonset -n $AQUA_PROBE_NAMESPACE aqua-enforcer-ds &>/dev/null; then
         print_colored_message green "✓ Aqua Enforcer daemonset found"
         echo
-    elif kubectl get daemonset -n $AQUA_WARDEN_NAMESPACE kube-enforcer-ds &>/dev/null; then
+    elif kubectl get daemonset -n $AQUA_PROBE_NAMESPACE kube-enforcer-ds &>/dev/null; then
         print_colored_message green "✓ Aqua Enforcer daemonset found"
         echo
-    elif kubectl get daemonset -n $AQUA_WARDEN_NAMESPACE $AQUA_WARDEN_DAEMONSET &>/dev/null; then
+    elif kubectl get daemonset -n $AQUA_PROBE_NAMESPACE $AQUA_PROBE_DAEMONSET &>/dev/null; then
         print_colored_message green "✓ Aqua Enforcer daemonset found"
         echo
     else
@@ -217,7 +217,7 @@ deploy_test_container() {
     echo
     print_colored_message yellow "Deploying Aqua test container..."
     # Deploying the container using kubectl
-    kubectl create deployment aqua-test-container --image=$AQUA_WARDEN_IMAGE -- sleep infinity
+    kubectl create deployment aqua-test-container --image=$AQUA_PROBE_IMAGE -- sleep infinity
 
     # Wait for the deployment to complete
     echo
@@ -265,7 +265,7 @@ test_realtime_malware_protection() {
   string3='-ANTIVIRUS-TEST-FILE!$H+H*'
   eicar_string="$string1$string2$string3"
 
-  if [ "$AQUA_WARDEN_SKIP_INSTRUCTIONS" ]; then
+  if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
     prerequisites_met="Y"
   else
     # Ask user if prerequisites are met
@@ -331,7 +331,7 @@ test_realtime_malware_protection() {
 
 # Drift Prevention
 test_drift_prevention() {
-    if [ "$AQUA_WARDEN_SKIP_INSTRUCTIONS" ]; then
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
@@ -380,7 +380,7 @@ test_drift_prevention() {
 
 # Block Cryptomining
 test_block_cryptocurrency_mining() {
-    if [ "$AQUA_WARDEN_SKIP_INSTRUCTIONS" ]; then
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
@@ -423,7 +423,7 @@ test_block_cryptocurrency_mining() {
 
 # Block Fileless Exec
 test_block_fileless_execution() {
-    if [ "$AQUA_WARDEN_SKIP_INSTRUCTIONS" ]; then
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
@@ -465,7 +465,7 @@ test_block_fileless_execution() {
 
 # Block Reverse Shell
 test_reverse_shell() {
-    if [ "$AQUA_WARDEN_SKIP_INSTRUCTIONS" ]; then
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
@@ -485,7 +485,7 @@ test_reverse_shell() {
                 # Create a listener pod with nc listener
                 echo
                 print_colored_message yellow "Creating listener pod"
-                kubectl run listener --image=$AQUA_WARDEN_IMAGE --command sleep infinity
+                kubectl run listener --image=$AQUA_PROBE_IMAGE --command sleep infinity
                 echo
                 print_colored_message yellow "Waiting for the listener container pod to start running..."
                 while ! kubectl get pods | grep listener | grep -q "Running"; do
@@ -523,7 +523,7 @@ test_reverse_shell() {
 
 # Executables Blocked
 test_executables_blocked() {
-    if [ "$AQUA_WARDEN_SKIP_INSTRUCTIONS" ]; then
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
@@ -569,7 +569,7 @@ test_executables_blocked() {
 
 # Block Container Exec
 test_block_container_exec() {
-    if [ "$AQUA_WARDEN_SKIP_INSTRUCTIONS" ]; then
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
@@ -627,10 +627,10 @@ terminate_program() {
                 echo "Aqua test container or listener container is not running."
                 echo "Exiting program without deleting the Aqua test container."
             fi
-            unset AQUA_WARDEN_SKIP_INSTRUCTIONS # Unset env var for skip instructions flag
-            unset AQUA_WARDEN_IMAGE # Unset env var for image flag
-            unset AQUA_WARDEN_DAEMONSET # Unset env var for daemonset flag
-            unset AQUA_WARDEN_NAMESPACE # Unset env var for namespace flag
+            unset AQUA_PROBE_SKIP_INSTRUCTIONS # Unset env var for skip instructions flag
+            unset AQUA_PROBE_IMAGE # Unset env var for image flag
+            unset AQUA_PROBE_DAEMONSET # Unset env var for daemonset flag
+            unset AQUA_PROBE_NAMESPACE # Unset env var for namespace flag
             exit
             ;;
         [Nn]*)
