@@ -949,6 +949,63 @@ EOF
 }
 
 
+# File Integrity Monitoring
+test_file_integrity_monitoring() {
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create a Custom Policy with File Integrity Monitoring Control enabled
+        2. Add '/opt/app/config' to the monitored paths
+        3. Ensure that the Custom Policy is set to 'Enforce' mode
+        4. Ensure that Block Container Exec Control is disabled"
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            # Execute commands in the deployed container
+            if check_container_existence; then
+                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                echo
+                print_colored_message yellow "Executing File Integrity Monitoring create, modify, permission change, and delete actions in the container..."
+                echo
+                cat <<'EOF'
+# Create a file
+echo "malicious change" > /opt/app/config/backdoor.conf
+
+# Modify an existing file
+echo "debug=true" >> /opt/app/config/app.conf
+
+# Change file permissions
+chmod 777 /opt/app/config/app.conf
+
+# Delete a file
+rm /opt/app/config/app.conf
+EOF
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'mkdir -p /opt/app/config && touch /opt/app/config/app.conf && echo "malicious change" > /opt/app/config/backdoor.conf && echo "debug=true" >> /opt/app/config/app.conf && chmod 777 /opt/app/config/app.conf && rm /opt/app/config/app.conf'
+                echo
+                print_colored_message yellow "[!] Observe that file create, modify, permission change, or delete activity was detected by Aqua."
+                echo
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            else
+                print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
+            fi
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -1034,10 +1091,11 @@ main() {
         echo "12. Test Port Scanning Detection"
         echo "13. Test Block Non-compliant Images"
         echo "14. Test Block Unregistered Images"
-        echo "15. Terminate Program"
+        echo "15. Test File Integrity Monitoring"
+        echo "16. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-15): " choice
+        read -p "Enter your choice (1-16): " choice
 
         case $choice in
             1)
@@ -1083,6 +1141,9 @@ main() {
                 test_block_unregistered_images
                 ;;
             15)
+                test_file_integrity_monitoring
+                ;;
+            16)
                 terminate_program
                 ;;
         esac

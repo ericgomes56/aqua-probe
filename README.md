@@ -23,6 +23,7 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 12. Test Port Scanning Detection
 13. Test Block Non-compliant Images
 14. Test Block Unregistered Images
+15. Test File Integrity Monitoring
 
 ## Usage
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
