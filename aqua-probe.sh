@@ -335,7 +335,7 @@ test_realtime_malware_protection() {
         echo
         kubectl exec -it $pod_name --container $container_name -- ls -la /tmp/
         echo
-        print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+        print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
 
       else  
         print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
@@ -386,7 +386,7 @@ test_drift_prevention() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -429,7 +429,7 @@ test_block_cryptocurrency_mining() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -471,7 +471,7 @@ test_block_fileless_execution() {
                 kubectl exec -it $pod_name --container $container_name -- ./tmp/memrun MASTER_HACKER_PROCESS_NAME_1337 /tmp/target
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -591,7 +591,7 @@ test_executables_blocked() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -632,7 +632,7 @@ test_block_container_exec() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -675,7 +675,7 @@ test_bad_dns_ip_reputation() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -719,7 +719,7 @@ test_file_block() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -763,7 +763,7 @@ test_package_block() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -807,7 +807,7 @@ test_port_scanning_detection() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to view a summary of the security incident."
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
