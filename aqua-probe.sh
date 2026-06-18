@@ -987,7 +987,20 @@ chmod 777 /opt/app/config/app.conf
 # Delete a file
 rm /opt/app/config/app.conf
 EOF
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'mkdir -p /opt/app/config && touch /opt/app/config/app.conf && echo "malicious change" > /opt/app/config/backdoor.conf && echo "debug=true" >> /opt/app/config/app.conf && chmod 777 /opt/app/config/app.conf && rm /opt/app/config/app.conf'
+                print_colored_message yellow "Preparing monitored directory and baseline file..."
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'mkdir -p /opt/app/config && touch /opt/app/config/app.conf'
+
+                print_colored_message yellow "Creating '/opt/app/config/backdoor.conf'..."
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "malicious change" > /opt/app/config/backdoor.conf'
+
+                print_colored_message yellow "Modifying '/opt/app/config/app.conf'..."
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "debug=true" >> /opt/app/config/app.conf'
+
+                print_colored_message yellow "Changing permissions on '/opt/app/config/app.conf'..."
+                kubectl exec -it $pod_name --container $container_name -- chmod 777 /opt/app/config/app.conf
+
+                print_colored_message yellow "Deleting '/opt/app/config/app.conf'..."
+                kubectl exec -it $pod_name --container $container_name -- rm /opt/app/config/app.conf
                 echo
                 print_colored_message yellow "[!] Observe that file create, modify, permission change, or delete activity was detected by Aqua."
                 echo
