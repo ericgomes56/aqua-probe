@@ -6,7 +6,7 @@
 ## Overview
 Aqua Probe is an interactive command-line tool designed to explore runtime security features provided by Aqua Security within Kubernetes environments. It allows users to experience Real-Time Malware Protection, Drift Prevention, and other security controls offered by Aqua.
 
-<img src="/misc/aqua-probe-demo.gif" height="500">
+<video src="/misc/aqua-probe-tool-demo.mov" height="500" controls></video>
 
 ## Features
 1. Deploy a test container within a Kubernetes cluster
