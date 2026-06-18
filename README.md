@@ -15,7 +15,7 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 4. Test Block Cryptocurrency Mining
 5. Test Block Fileless Exec 
 6. Test Block Reverse Shell
-7. Test Executables Blocked (ps)
+7. Test Executables Blocked
 8. Test Block Container Exec
 9. Test Bad DNS/IP Reputation
 10. Test File Block

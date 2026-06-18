@@ -899,7 +899,7 @@ main() {
         echo "4. Test Block Cryptocurrency Mining"
         echo "5. Test Block Fileless Execution"
         echo "6. Test Reverse Shell"
-        echo "7. Test Executables Blocked [ps]"
+        echo "7. Test Executables Blocked"
         echo "8. Test Block Container Exec"
         echo "9. Test Bad DNS/IP Reputation"
         echo "10. Test File Block"
