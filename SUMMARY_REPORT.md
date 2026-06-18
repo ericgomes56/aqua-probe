@@ -2,7 +2,7 @@
 
 ## Files Renamed
 - `aqua-warden.sh` -> `aqua-probe.sh`
-- `misc/aqua-warden-demo.gif` -> `misc/aqua-probe-tool-demo.mov`
+- `misc/aqua-warden-demo.gif` -> `misc/aqua-probe-demo.gif`
 - `misc/aqua-warden-advanced-commands.png` -> `misc/aqua-probe-advanced-commands.png`
 - `misc/aqua_warden_1x1.png` -> `misc/aqua_probe_1x1.png`
 - `misc/aqua_warden_1920x1080.png` -> `misc/aqua_probe_1920x1080.png`
