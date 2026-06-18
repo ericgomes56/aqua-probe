@@ -778,6 +778,50 @@ test_package_block() {
 }
 
 
+# Port Scanning Detection
+test_port_scanning_detection() {
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create a Custom Policy with Port Scanning Detection Control enabled
+        2. Ensure that the Custom Policy is set to 'Enforce' mode
+        3. Ensure that Block Container Exec Control is disabled"
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            # Execute commands in the deployed container
+            if check_container_existence; then
+                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                echo
+                print_colored_message yellow "Executing port scan command in the container..."
+                echo
+                echo 'for p in {1..1024}; do timeout 1 bash -c "echo >/dev/tcp/10.0.0.1/$p" 2>/dev/null & done; wait'
+                kubectl exec -it $pod_name --container $container_name -- bash -c 'for p in {1..1024}; do timeout 1 bash -c "echo >/dev/tcp/10.0.0.1/$p" 2>/dev/null & done; wait'
+                echo
+                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                echo
+                print_colored_message green "[✓] Please login to the Aqua Console's Incident Screen to view a summary of the security incident."
+            else
+                print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
+            fi
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -860,10 +904,11 @@ main() {
         echo "9. Test Bad DNS/IP Reputation"
         echo "10. Test File Block"
         echo "11. Test Package Block"
-        echo "12. Terminate Program"
+        echo "12. Test Port Scanning Detection"
+        echo "13. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-12): " choice
+        read -p "Enter your choice (1-13): " choice
 
         case $choice in
             1)
@@ -900,6 +945,9 @@ main() {
                 test_package_block
                 ;;
             12)
+                test_port_scanning_detection
+                ;;
+            13)
                 terminate_program
                 ;;
         esac
