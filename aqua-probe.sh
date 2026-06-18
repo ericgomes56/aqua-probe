@@ -1241,6 +1241,47 @@ EOF
 }
 
 
+# Block Non-Kubernetes Containers
+test_block_non_kubernetes_containers() {
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create a Custom Policy with Block Non-Kubernetes Containers Control enabled
+        2. Ensure that the Custom Policy is set to 'Enforce' mode
+        3. SSH to the Kubernetes worker node where the Aqua Enforcer is running
+        4. Ensure that you have access to the container runtime to deploy a Docker-only container"
+        echo
+        print_colored_message yellow "[!] Disclaimer: This test only works when executed on a Kubernetes worker node with direct access to the container runtime. It is intended to deploy a Docker-only container outside the Kubernetes API."
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            print_colored_message yellow "Deploying Docker-only container with image: $AQUA_PROBE_IMAGE"
+            echo
+            echo "docker run -d --name aqua-non-k8s-container $AQUA_PROBE_IMAGE sleep 3600"
+            docker rm -f aqua-non-k8s-container >/dev/null 2>&1
+            docker run -d --name aqua-non-k8s-container $AQUA_PROBE_IMAGE sleep 3600
+            echo
+            print_colored_message yellow "[!] Observe that the Docker-only container is blocked because it was started outside Kubernetes."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -1329,10 +1370,11 @@ main() {
         echo "15. Test File Integrity Monitoring"
         echo "16. Test System Integrity Monitoring"
         echo "17. Test Limit Container Privileges"
-        echo "18. Terminate Program"
+        echo "18. Test Block Non-Kubernetes Containers"
+        echo "19. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-18): " choice
+        read -p "Enter your choice (1-19): " choice
 
         case $choice in
             1)
@@ -1387,6 +1429,9 @@ main() {
                 test_limit_container_privileges
                 ;;
             18)
+                test_block_non_kubernetes_containers
+                ;;
+            19)
                 terminate_program
                 ;;
         esac
