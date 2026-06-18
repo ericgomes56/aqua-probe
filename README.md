@@ -1,7 +1,7 @@
 <img src="/misc/aqua_probe_1x1.png" width="300" height="300">
 
 
-# Aqua Probe: The Aqua Runtime Security POV Tool
+# Aqua Probe: The Aqua Security Runtime Input Validator Tool
 
 ## Overview
 Aqua Probe is an interactive command-line tool designed to explore runtime security features provided by Aqua Security within Kubernetes environments. It allows users to experience Real-Time Malware Protection, Drift Prevention, and other security controls offered by Aqua.
@@ -70,10 +70,3 @@ Show the current Aqua Probe build version
 
 ## Aqua Probe Image
 Container image examples use `ericgomes56/aqua-probe:1.0`.
-
-## Credits
-Tool developed by Eric Gomes, Senior DevSecOps Architect @ Aqua Security
-##
-Rhett Sandal, Principal Support Engineer, for testing the update release! 
-##
-Guitmz for his memrun project: https://github.com/guitmz/memrun
