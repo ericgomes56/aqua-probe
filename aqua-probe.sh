@@ -1300,6 +1300,66 @@ test_block_non_kubernetes_containers() {
 }
 
 
+# Port Block
+test_port_block() {
+    local default_host="10.0.0.1"
+    local default_port="22"
+
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create a Custom Policy with Port Block Control enabled
+        2. Add the destination port you will test to the blocked ports list
+        3. Ensure that the Custom Policy is set to 'Enforce' mode
+        4. Ensure that Block Container Exec Control is disabled"
+        echo
+        print_colored_message yellow "[!] This test opens a TCP connection from the Aqua test container to a target host and port. Use a reachable target and make sure the same port is configured in the Port Block control."
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            # Execute commands in the deployed container
+            if check_container_existence; then
+                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                echo
+                read -p "Enter target host or IP [default: $default_host]: " port_block_host
+                if [ -z "$port_block_host" ]; then
+                    port_block_host="$default_host"
+                fi
+                read -p "Enter target port configured in the Port Block policy [default: $default_port]: " port_block_port
+                if [ -z "$port_block_port" ]; then
+                    port_block_port="$default_port"
+                fi
+
+                echo
+                print_colored_message yellow "Executing TCP connection test to $port_block_host:$port_block_port in the container..."
+                echo
+                echo "timeout 5 bash -c 'echo >/dev/tcp/$port_block_host/$port_block_port'"
+                kubectl exec -it $pod_name --container $container_name -- bash -c "timeout 5 bash -c 'echo >/dev/tcp/$port_block_host/$port_block_port'"
+                echo
+                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because the destination port has been blocked by Aqua."
+                echo
+                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            else
+                print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
+            fi
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -1390,10 +1450,11 @@ main() {
         echo "16. Test System Integrity Monitoring"
         echo "17. Test Limit Container Privileges"
         echo "18. Test Block Non-Kubernetes Containers"
-        echo "19. Terminate Program"
+        echo "19. Test Port Block"
+        echo "20. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-19): " choice
+        read -p "Enter your choice (1-20): " choice
 
         case $choice in
             1)
@@ -1451,6 +1512,9 @@ main() {
                 test_block_non_kubernetes_containers
                 ;;
             19)
+                test_port_block
+                ;;
+            20)
                 terminate_program
                 ;;
         esac
