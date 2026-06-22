@@ -1435,6 +1435,666 @@ EOF
 }
 
 
+# Block Non-compliant Resources
+test_block_non_compliant_resources() {
+    local lab_namespace="aqua-controls-lab"
+
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create a Custom Policy with Block Non-compliant Resources enabled
+        2. Enable the Kubernetes resource checks you want to validate
+        3. Ensure that the Custom Policy is set to 'Enforce' mode
+        4. Ensure that the policy is applied to this Kubernetes environment"
+        echo
+        print_colored_message yellow "[!] This test applies intentionally non-compliant Kubernetes resources in namespace '$lab_namespace'. Use only in a disposable lab cluster."
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            print_colored_message yellow "Applying non-compliant Kubernetes resource examples with image: $AQUA_PROBE_IMAGE"
+            echo
+            kubectl create namespace $lab_namespace --dry-run=client -o yaml | kubectl apply -f -
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-ipc-bad
+  namespace: $lab_namespace
+spec:
+  hostIPC: true
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-pid-bad
+  namespace: $lab_namespace
+spec:
+  hostPID: true
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-network-bad
+  namespace: $lab_namespace
+spec:
+  hostNetwork: true
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-port-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 80
+      hostPort: 8080
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: non-compliant-image-domain-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: anonymous-view-bad
+subjects:
+- kind: User
+  name: system:anonymous
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-limit-missing-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    resources:
+      requests:
+        cpu: "100m"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-request-missing-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    resources:
+      limits:
+        cpu: "500m"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: allow-privilege-escalation-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      allowPrivilegeEscalation: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-secret-bad
+  namespace: $lab_namespace
+data:
+  password: "SuperSecret123"
+  api_key: "abc123"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-sensitive-bad
+  namespace: $lab_namespace
+data:
+  username: "admin"
+  email: "admin@example.com"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: caps-not-drop-all-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      capabilities:
+        drop:
+        - NET_RAW
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: caps-drop-none-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: delete-pod-logs-bad
+  namespace: $lab_namespace
+rules:
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-exec-bad
+  namespace: $lab_namespace
+rules:
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: latest-tag-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: disallowed-hostpath-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    volumeMounts:
+    - name: host-etc
+      mountPath: /host-etc
+  volumes:
+  - name: host-etc
+    hostPath:
+      path: /etc
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rbac-manager-bad
+rules:
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: networking-manager-bad
+rules:
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies", "ingresses"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workload-manager-bad
+  namespace: $lab_namespace
+rules:
+- apiGroups: ["", "apps", "batch"]
+  resources: ["pods", "deployments", "daemonsets", "statefulsets", "jobs", "cronjobs"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manage-all-resources-bad
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: namespace-admin-bad
+  namespace: $lab_namespace
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: namespace-secret-manager-bad
+  namespace: $lab_namespace
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-secret-manager-bad
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhookconfig-manager-bad
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+  verbs: ["*"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hostaliases-bad
+  namespace: $lab_namespace
+spec:
+  hostAliases:
+  - ip: "1.2.3.4"
+    hostnames:
+    - "internal.service.local"
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-limit-missing-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    resources:
+      requests:
+        memory: "128Mi"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-request-missing-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    resources:
+      limits:
+        memory: "512Mi"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: net-raw-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      capabilities:
+        add:
+        - NET_RAW
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proc-mount-unmasked-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      procMount: Unmasked
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-port-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      privileged: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writable-rootfs-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      readOnlyRootFilesystem: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: runs-as-root-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      runAsUser: 0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: low-gid-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      runAsGroup: 1000
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: low-uid-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      runAsUser: 1000
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: apparmor-unconfined-bad
+  namespace: $lab_namespace
+  annotations:
+    container.apparmor.security.beta.kubernetes.io/app: unconfined
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seccomp-unconfined-bad
+  namespace: $lab_namespace
+spec:
+  securityContext:
+    seccompProfile:
+      type: Unconfined
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: selinux-custom-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      seLinuxOptions:
+        user: "system_u"
+        role: "system_r"
+        type: "spc_t"
+        level: "s0:c123,c456"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sys-admin-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      capabilities:
+        add:
+        - SYS_ADMIN
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sys-module-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      capabilities:
+        add:
+        - SYS_MODULE
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-ip-bad
+  namespace: $lab_namespace
+spec:
+  selector:
+    app: demo
+  externalIPs:
+  - 8.8.8.8
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: specific-capability-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    securityContext:
+      capabilities:
+        add:
+        - CHOWN
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unsafe-sysctl-bad
+  namespace: $lab_namespace
+spec:
+  securityContext:
+    sysctls:
+    - name: kernel.shm_rmid_forced
+      value: "0"
+    - name: net.ipv4.ip_forward
+      value: "1"
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: user-admin-access-bad
+subjects:
+- kind: User
+  name: developer@example.com
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-namespace-bad
+  namespace: default
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: docker-sock-hostpath-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    volumeMounts:
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hostpath-volume-bad
+  namespace: $lab_namespace
+spec:
+  containers:
+  - name: app
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    volumeMounts:
+    - name: host-var-log
+      mountPath: /host-var-log
+  volumes:
+  - name: host-var-log
+    hostPath:
+      path: /var/log
+EOF
+            echo
+            print_colored_message yellow "[!] Observe that non-compliant resource creation is blocked or reported by Aqua."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            echo
+            print_colored_message yellow "Cleanup when finished: kubectl delete namespace $lab_namespace"
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -1527,10 +2187,11 @@ main() {
         echo "18. Test Block Non-Kubernetes Containers"
         echo "19. Test Port Block"
         echo "20. Test Volumes Blocked"
-        echo "21. Terminate Program"
+        echo "21. Test Block Non-compliant Resources"
+        echo "22. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-21): " choice
+        read -p "Enter your choice (1-22): " choice
 
         case $choice in
             1)
@@ -1594,6 +2255,9 @@ main() {
                 test_volumes_blocked
                 ;;
             21)
+                test_block_non_compliant_resources
+                ;;
+            22)
                 terminate_program
                 ;;
         esac
