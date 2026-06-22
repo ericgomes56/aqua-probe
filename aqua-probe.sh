@@ -67,7 +67,7 @@ handle_flags() {
     # Version flag
       --version | -v)
         echo
-        echo "Version Build Date: 15 November 2024"
+        echo "Version Build Date: 22 June 2026"
         echo
         shift  # Shift to the next argument
         ;;
