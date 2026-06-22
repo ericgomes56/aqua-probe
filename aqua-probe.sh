@@ -192,6 +192,24 @@ check_aqua_agent_daemonset() {
     fi
 }
 
+check_aqua_kube_enforcer_deployment() {
+    echo -n "Checking Aqua Kube-Enforcer (aqua-kube-enforcer) deployment"
+    for i in {1..10}; do
+        echo -n "."
+        sleep 0.2
+    done
+    print_colored_message green "[✓] Done"
+
+    # Check if aqua-kube-enforcer deployment exists in the Aqua namespace
+    if kubectl get deployment -n $AQUA_PROBE_NAMESPACE aqua-kube-enforcer &>/dev/null; then
+        print_colored_message green "✓ Aqua Kube-Enforcer deployment found"
+        echo
+    else
+        print_colored_message red "✗ Error: Aqua Kube-Enforcer deployment not found. Please deploy the Aqua Kube-Enforcer."
+        exit 1
+    fi
+}
+
 #
 # Test container management
 #
@@ -1330,6 +1348,7 @@ main() {
 
     check_kubernetes_connection
     check_aqua_agent_daemonset
+    check_aqua_kube_enforcer_deployment
 
     # Check if Aqua test container exists
     if check_container_existence; then
