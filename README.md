@@ -28,6 +28,7 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 17. Test Limit Container Privileges
 18. Test Block Non-Kubernetes Containers
 19. Test Port Block
+20. Test Volumes Blocked
 
 ## Usage
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.

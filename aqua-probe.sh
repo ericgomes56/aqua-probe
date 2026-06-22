@@ -1360,6 +1360,81 @@ test_port_block() {
 }
 
 
+# Volumes Blocked
+test_volumes_blocked() {
+    local default_host_path="/etc"
+    local default_mount_path="/host-etc"
+
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create a Custom Policy with Volumes Blocked Control enabled
+        2. Add the host path you will test to the blocked volumes list
+        3. Ensure that the Custom Policy is set to 'Enforce' mode
+        4. Ensure that the policy is applied to this Kubernetes environment"
+        echo
+        print_colored_message yellow "[!] This test deploys a pod with a hostPath volume. Use a host path that is configured in the Volumes Blocked control."
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            read -p "Enter blocked host path to mount [default: $default_host_path]: " blocked_host_path
+            if [ -z "$blocked_host_path" ]; then
+                blocked_host_path="$default_host_path"
+            fi
+            read -p "Enter container mount path [default: $default_mount_path]: " blocked_mount_path
+            if [ -z "$blocked_mount_path" ]; then
+                blocked_mount_path="$default_mount_path"
+            fi
+
+            echo
+            print_colored_message yellow "Deploying volume block test pod with hostPath '$blocked_host_path' mounted at '$blocked_mount_path'..."
+            echo
+            kubectl delete pod volume-block-test --ignore-not-found
+            kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-block-test
+spec:
+  containers:
+  - name: test
+    image: $AQUA_PROBE_IMAGE
+    imagePullPolicy: Always
+    command: ["sleep","3600"]
+    volumeMounts:
+    - name: blocked-volume
+      mountPath: $blocked_mount_path
+      readOnly: true
+  volumes:
+  - name: blocked-volume
+    hostPath:
+      path: $blocked_host_path
+      type: Directory
+EOF
+            echo
+            echo "Verify: kubectl get pod volume-block-test -o yaml | grep -A5 hostPath"
+            echo
+            print_colored_message yellow "[!] Observe that the pod creation is blocked because it requests a blocked hostPath volume."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -1451,10 +1526,11 @@ main() {
         echo "17. Test Limit Container Privileges"
         echo "18. Test Block Non-Kubernetes Containers"
         echo "19. Test Port Block"
-        echo "20. Terminate Program"
+        echo "20. Test Volumes Blocked"
+        echo "21. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-20): " choice
+        read -p "Enter your choice (1-21): " choice
 
         case $choice in
             1)
@@ -1515,6 +1591,9 @@ main() {
                 test_port_block
                 ;;
             20)
+                test_volumes_blocked
+                ;;
+            21)
                 terminate_program
                 ;;
         esac
