@@ -2168,26 +2168,26 @@ main() {
     while true; do
         echo "Please select an option:"
         echo "1. Deploy/Redeploy test container"
-        echo "2. Test Real-time Malware Protection [Delete action]"
-        echo "3. Test Drift Prevention"
+        echo "2. Test Bad DNS/IP Reputation"
+        echo "3. Test Block Container Exec"
         echo "4. Test Block Cryptocurrency Mining"
         echo "5. Test Block Fileless Execution"
-        echo "6. Test Reverse Shell"
-        echo "7. Test Executables Blocked"
-        echo "8. Test Block Container Exec"
-        echo "9. Test Bad DNS/IP Reputation"
-        echo "10. Test File Block"
-        echo "11. Test Package Block"
-        echo "12. Test Port Scanning Detection"
-        echo "13. Test Block Non-compliant Images"
-        echo "14. Test Block Unregistered Images"
-        echo "15. Test File Integrity Monitoring"
-        echo "16. Test System Integrity Monitoring"
-        echo "17. Test Limit Container Privileges"
-        echo "18. Test Block Non-Kubernetes Containers"
-        echo "19. Test Port Block"
-        echo "20. Test Volumes Blocked"
-        echo "21. Test Block Non-compliant Resources"
+        echo "6. Test Block Non-compliant Images"
+        echo "7. Test Block Non-compliant Resources"
+        echo "8. Test Block Non-Kubernetes Containers"
+        echo "9. Test Block Reverse Shell"
+        echo "10. Test Block Unregistered Images"
+        echo "11. Test Drift Prevention"
+        echo "12. Test Executables Blocked"
+        echo "13. Test File Block"
+        echo "14. Test File Integrity Monitoring"
+        echo "15. Test Limit Container Privileges"
+        echo "16. Test Package Block"
+        echo "17. Test Port Block"
+        echo "18. Test Port Scanning Detection"
+        echo "19. Test Real-time Malware Protection [Delete action]"
+        echo "20. Test System Integrity Monitoring"
+        echo "21. Test Volumes Blocked"
         echo "22. Terminate Program"
         echo
 
@@ -2198,10 +2198,10 @@ main() {
                 deploy_test_container
                 ;;
             2)
-                test_realtime_malware_protection
+                test_bad_dns_ip_reputation
                 ;;
             3)
-                test_drift_prevention
+                test_block_container_exec
                 ;;
             4)
                 test_block_cryptocurrency_mining
@@ -2210,52 +2210,52 @@ main() {
                 test_block_fileless_execution
                 ;;
             6)
-                test_reverse_shell
-                ;;
-            7)
-                test_executables_blocked 
-                ;;
-            8)
-                test_block_container_exec
-                ;;
-            9)
-                test_bad_dns_ip_reputation
-                ;;
-            10)
-                test_file_block
-                ;;
-            11)
-                test_package_block
-                ;;
-            12)
-                test_port_scanning_detection
-                ;;
-            13)
                 test_block_non_compliant_images
                 ;;
-            14)
-                test_block_unregistered_images
+            7)
+                test_block_non_compliant_resources
                 ;;
-            15)
-                test_file_integrity_monitoring
-                ;;
-            16)
-                test_system_integrity_monitoring
-                ;;
-            17)
-                test_limit_container_privileges
-                ;;
-            18)
+            8)
                 test_block_non_kubernetes_containers
                 ;;
-            19)
+            9)
+                test_reverse_shell
+                ;;
+            10)
+                test_block_unregistered_images
+                ;;
+            11)
+                test_drift_prevention
+                ;;
+            12)
+                test_executables_blocked
+                ;;
+            13)
+                test_file_block
+                ;;
+            14)
+                test_file_integrity_monitoring
+                ;;
+            15)
+                test_limit_container_privileges
+                ;;
+            16)
+                test_package_block
+                ;;
+            17)
                 test_port_block
                 ;;
+            18)
+                test_port_scanning_detection
+                ;;
+            19)
+                test_realtime_malware_protection
+                ;;
             20)
-                test_volumes_blocked
+                test_system_integrity_monitoring
                 ;;
             21)
-                test_block_non_compliant_resources
+                test_volumes_blocked
                 ;;
             22)
                 terminate_program

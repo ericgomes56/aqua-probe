@@ -10,26 +10,26 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 
 ## Features
 1. Deploy a test container within a Kubernetes cluster
-2. Test Real-time Malware Protection with delete action
-3. Test Drift Prevention 
+2. Test Bad DNS/IP Reputation
+3. Test Block Container Exec
 4. Test Block Cryptocurrency Mining
-5. Test Block Fileless Exec 
-6. Test Block Reverse Shell
-7. Test Executables Blocked
-8. Test Block Container Exec
-9. Test Bad DNS/IP Reputation
-10. Test File Block
-11. Test Package Block
-12. Test Port Scanning Detection
-13. Test Block Non-compliant Images
-14. Test Block Unregistered Images
-15. Test File Integrity Monitoring
-16. Test System Integrity Monitoring
-17. Test Limit Container Privileges
-18. Test Block Non-Kubernetes Containers
-19. Test Port Block
-20. Test Volumes Blocked
-21. Test Block Non-compliant Resources
+5. Test Block Fileless Exec
+6. Test Block Non-compliant Images
+7. Test Block Non-compliant Resources
+8. Test Block Non-Kubernetes Containers
+9. Test Block Reverse Shell
+10. Test Block Unregistered Images
+11. Test Drift Prevention
+12. Test Executables Blocked
+13. Test File Block
+14. Test File Integrity Monitoring
+15. Test Limit Container Privileges
+16. Test Package Block
+17. Test Port Block
+18. Test Port Scanning Detection
+19. Test Real-time Malware Protection with delete action
+20. Test System Integrity Monitoring
+21. Test Volumes Blocked
 
 ## Usage
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
