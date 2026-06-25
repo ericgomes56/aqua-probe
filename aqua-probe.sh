@@ -294,6 +294,47 @@ delete_listener_container() {
     fi
 }
 
+cleanup_non_compliant_resources_lab() {
+    local lab_namespace="aqua-controls-lab"
+    local lab_pods=(
+        host-ipc-bad host-pid-bad host-network-bad host-port-bad
+        non-compliant-image-domain-bad cpu-limit-missing-bad cpu-request-missing-bad
+        allow-privilege-escalation-bad caps-not-drop-all-bad caps-drop-none-bad
+        latest-tag-bad disallowed-hostpath-bad hostaliases-bad
+        memory-limit-missing-bad memory-request-missing-bad net-raw-bad
+        proc-mount-unmasked-bad privileged-port-bad privileged-bad writable-rootfs-bad
+        runs-as-root-bad low-gid-bad low-uid-bad apparmor-unconfined-bad
+        seccomp-unconfined-bad selinux-custom-bad sys-admin-bad sys-module-bad
+        specific-capability-bad unsafe-sysctl-bad docker-sock-hostpath-bad
+        hostpath-volume-bad
+    )
+    local lab_configmaps=(configmap-secret-bad configmap-sensitive-bad)
+    local lab_services=(external-ip-bad)
+    local lab_roles=(
+        delete-pod-logs-bad pod-exec-bad workload-manager-bad namespace-admin-bad
+        namespace-secret-manager-bad
+    )
+    local cluster_role_bindings=(anonymous-view-bad user-admin-access-bad)
+    local cluster_roles=(
+        rbac-manager-bad networking-manager-bad manage-all-resources-bad
+        cluster-secret-manager-bad webhookconfig-manager-bad
+    )
+
+    echo
+    print_colored_message yellow "Cleaning up non-compliant resource test artifacts..."
+
+    if kubectl get namespace "$lab_namespace" >/dev/null 2>&1; then
+        kubectl delete pod "${lab_pods[@]}" -n "$lab_namespace" --ignore-not-found
+        kubectl delete configmap "${lab_configmaps[@]}" -n "$lab_namespace" --ignore-not-found
+        kubectl delete service "${lab_services[@]}" -n "$lab_namespace" --ignore-not-found
+        kubectl delete role "${lab_roles[@]}" -n "$lab_namespace" --ignore-not-found
+    fi
+    kubectl delete pod default-namespace-bad -n default --ignore-not-found
+    kubectl delete clusterrolebinding "${cluster_role_bindings[@]}" --ignore-not-found
+    kubectl delete clusterrole "${cluster_roles[@]}" --ignore-not-found
+    kubectl delete namespace "$lab_namespace" --ignore-not-found --wait=false
+}
+
 #
 # Runtime Test Cases
 #
@@ -2083,7 +2124,7 @@ EOF
             echo
             print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
             echo
-            print_colored_message yellow "Cleanup when finished: kubectl delete namespace $lab_namespace"
+            print_colored_message yellow "Cleanup runs automatically when you select the Terminate Program option."
             ;;
         [Nn]*)
             echo "Please ensure the prerequisites are met before proceeding."
@@ -2114,6 +2155,7 @@ terminate_program() {
                 echo "Aqua test container or listener container is not running."
                 echo "Exiting program without deleting the Aqua test container."
             fi
+            cleanup_non_compliant_resources_lab
             unset AQUA_PROBE_SKIP_INSTRUCTIONS # Unset env var for skip instructions flag
             unset AQUA_PROBE_IMAGE # Unset env var for image flag
             unset AQUA_PROBE_DAEMONSET # Unset env var for daemonset flag
