@@ -321,7 +321,7 @@ cleanup_aqua_probe_artifacts() {
 
     if command -v docker >/dev/null 2>&1; then
         echo
-        print_colored_message yellow "Cleaning up Aqua Probe Docker-only test artifacts..."
+        print_colored_message yellow "Cleaning up Aqua Probe test artifacts..."
         docker rm -f aqua-non-k8s-container >/dev/null 2>&1 || true
     fi
 }
