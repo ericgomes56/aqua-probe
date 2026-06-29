@@ -1631,7 +1631,7 @@ spec:
       requests:
         cpu: "100m"
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "cpu-request-missing-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1645,7 +1645,8 @@ spec:
     resources:
       limits:
         cpu: "500m"
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
