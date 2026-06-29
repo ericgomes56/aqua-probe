@@ -1827,7 +1827,7 @@ rules:
   resources: ["secrets"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "cluster-secret-manager-bad" <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -1836,7 +1836,8 @@ rules:
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["*"]
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
