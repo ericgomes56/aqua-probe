@@ -2070,7 +2070,7 @@ spec:
         add:
         - SYS_ADMIN
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "sys-module-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -2085,7 +2085,8 @@ spec:
       capabilities:
         add:
         - SYS_MODULE
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Service
 metadata:
