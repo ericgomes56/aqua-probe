@@ -2054,7 +2054,7 @@ spec:
         type: "spc_t"
         level: "s0:c123,c456"
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "sys-admin-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -2069,7 +2069,8 @@ spec:
       capabilities:
         add:
         - SYS_ADMIN
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
