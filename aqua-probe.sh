@@ -1660,7 +1660,7 @@ spec:
     securityContext:
       allowPrivilegeEscalation: true
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "configmap-secret-bad" <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -1669,7 +1669,8 @@ metadata:
 data:
   password: "SuperSecret123"
   api_key: "abc123"
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
