@@ -2086,7 +2086,7 @@ spec:
         add:
         - SYS_MODULE
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "external-ip-bad" <<EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -2100,7 +2100,8 @@ spec:
   ports:
   - port: 80
     targetPort: 80
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
