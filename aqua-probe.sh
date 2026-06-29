@@ -1893,7 +1893,7 @@ spec:
       limits:
         memory: "512Mi"
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "net-raw-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1908,7 +1908,8 @@ spec:
       capabilities:
         add:
         - NET_RAW
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
