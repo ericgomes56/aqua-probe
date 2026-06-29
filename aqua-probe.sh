@@ -1670,7 +1670,7 @@ data:
   password: "SuperSecret123"
   api_key: "abc123"
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "configmap-sensitive-bad" <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -1679,7 +1679,8 @@ metadata:
 data:
   username: "admin"
   email: "admin@example.com"
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
