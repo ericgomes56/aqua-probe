@@ -2161,7 +2161,7 @@ spec:
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "docker-sock-hostpath-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -2180,7 +2180,8 @@ spec:
     hostPath:
       path: /var/run/docker.sock
       type: Socket
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
