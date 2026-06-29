@@ -308,6 +308,7 @@ cleanup_aqua_probe_artifacts() {
     local standalone_test_pods=(listener volume-block-test)
     local test_deployments=(
         aqua-test-container aqua-non-compliant-image-test aqua-unregistered-image-test
+        mars-banking-app
     )
 
     echo
@@ -316,6 +317,8 @@ cleanup_aqua_probe_artifacts() {
     kubectl delete deployment "${test_deployments[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
     kubectl delete pod "${standalone_test_pods[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --force --ignore-not-found
     kubectl delete pod "${privilege_test_pods[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
+    kubectl delete service mars-banking-app-lb -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
+    kubectl delete secret openai-api-key -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
 
     cleanup_non_compliant_resources_lab
 
@@ -2227,6 +2230,117 @@ EOF
 }
 
 
+# Secure AI - Discovery
+test_secure_ai_discovery() {
+    local ai_app_name="mars-banking-app"
+    local ai_service_name="mars-banking-app-lb"
+    local openai_secret_name="openai-api-key"
+
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create or update the Aqua policy required for Secure AI Discovery
+        2. Ensure that Secure AI discovery controls are enabled for this Kubernetes environment
+        3. Ensure that the policy is applied to namespace '$AQUA_PROBE_TEST_NAMESPACE'
+        4. Have an OpenAI API key ready. It will be collected as sensitive input and stored as a Kubernetes secret named '$openai_secret_name'"
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            read -s -p "Enter OpenAI API key for the AI discovery app: " openai_api_key
+            echo
+
+            if [ -z "$openai_api_key" ]; then
+                print_colored_message red "OpenAI API key cannot be empty. Aborting Secure AI - Discovery deployment."
+                return
+            fi
+
+            openai_api_key_b64=$(printf '%s' "$openai_api_key" | base64 | tr -d '\n')
+            unset openai_api_key
+
+            ensure_test_namespace
+            echo
+            print_colored_message yellow "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $openai_secret_name
+type: Opaque
+data:
+  OPENAI_API_KEY: $openai_api_key_b64
+EOF
+            unset openai_api_key_b64
+
+            echo
+            print_colored_message yellow "Deploying Secure AI - Discovery sample app..."
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: $ai_app_name
+  labels:
+    app: $ai_app_name
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: $ai_app_name
+  template:
+    metadata:
+      labels:
+        app: $ai_app_name
+    spec:
+      containers:
+        - name: $ai_app_name
+          image: ericgomes56/ai-app:1.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8501
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: $openai_secret_name
+                  key: OPENAI_API_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: $ai_service_name
+spec:
+  type: LoadBalancer
+  selector:
+    app: $ai_app_name
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8501
+EOF
+            echo
+            print_colored_message yellow "Waiting for Secure AI - Discovery deployment rollout..."
+            kubectl rollout status deployment/$ai_app_name -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=120s
+            echo
+            print_colored_message yellow "[!] Observe that the AI application is discovered by Aqua Secure AI controls."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console and review Secure AI discovery findings for the deployed AI application."
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -2305,12 +2419,13 @@ main() {
         echo "17. Test Port Block"
         echo "18. Test Port Scanning Detection"
         echo "19. Test Real-time Malware Protection [Delete action]"
-        echo "20. Test System Integrity Monitoring"
-        echo "21. Test Volumes Blocked"
-        echo "22. Terminate Program"
+        echo "20. Test Secure AI - Discovery"
+        echo "21. Test System Integrity Monitoring"
+        echo "22. Test Volumes Blocked"
+        echo "23. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-22): " choice
+        read -p "Enter your choice (1-23): " choice
 
         case $choice in
             1)
@@ -2371,12 +2486,15 @@ main() {
                 test_realtime_malware_protection
                 ;;
             20)
-                test_system_integrity_monitoring
+                test_secure_ai_discovery
                 ;;
             21)
-                test_volumes_blocked
+                test_system_integrity_monitoring
                 ;;
             22)
+                test_volumes_blocked
+                ;;
+            23)
                 terminate_program
                 ;;
         esac
