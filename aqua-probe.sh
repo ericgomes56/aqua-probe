@@ -1937,7 +1937,7 @@ spec:
     ports:
     - containerPort: 80
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "privileged-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1950,7 +1950,8 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: true
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
