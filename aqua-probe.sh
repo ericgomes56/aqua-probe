@@ -230,7 +230,24 @@ ensure_test_namespace() {
     kubectl create namespace "$AQUA_PROBE_TEST_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 }
 
+prompt_for_test_image() {
+    local prompt_message="$1"
+    local default_image="${AQUA_PROBE_IMAGE:-ericgomes56/aqua-probe:1.0}"
+    local selected_image
+
+    printf "%s [default: %s]: " "$prompt_message" "$default_image" >&2
+    read selected_image
+
+    if [ -z "$selected_image" ]; then
+        selected_image="$default_image"
+    fi
+
+    printf "%s" "$selected_image"
+}
+
 deploy_test_container() {
+    local test_container_image
+
     # Check if the aqua-test-container deployment already exists
     if check_container_existence; then
         echo "Aqua test container already exists. Redeploying..."
@@ -239,6 +256,7 @@ deploy_test_container() {
 
     echo
     print_colored_message yellow "Deploying Aqua test container..."
+    test_container_image=$(prompt_for_test_image "Enter image to deploy for the Aqua test container")
     ensure_test_namespace
     # Deploying the container using kubectl
     kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
@@ -258,7 +276,7 @@ spec:
     spec:
       containers:
       - name: aqua-probe
-        image: $AQUA_PROBE_IMAGE
+        image: $test_container_image
         imagePullPolicy: Always
         command:
         - sleep
@@ -609,6 +627,7 @@ test_reverse_shell() {
                 # Create a listener pod with nc listener
                 echo
                 print_colored_message yellow "Creating listener pod"
+                listener_image=$(prompt_for_test_image "Enter image to deploy for the reverse shell listener pod")
                 ensure_test_namespace
                 kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
@@ -620,7 +639,7 @@ metadata:
 spec:
   containers:
   - name: listener
-    image: $AQUA_PROBE_IMAGE
+    image: $listener_image
     imagePullPolicy: Always
     command:
     - sleep
@@ -942,7 +961,8 @@ test_block_non_compliant_images() {
     case $prerequisites_met in
         [Yy]*)
             echo
-            print_colored_message yellow "Deploying non-compliant image test container..."
+            non_compliant_image=$(prompt_for_test_image "Enter image to deploy for the non-compliant image test")
+            print_colored_message yellow "Deploying non-compliant image test container with image: $non_compliant_image"
             echo
             ensure_test_namespace
             kubectl delete deployment aqua-non-compliant-image-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -963,7 +983,7 @@ spec:
     spec:
       containers:
       - name: eicar
-        image: jerbi/eicar:latest
+        image: $non_compliant_image
         imagePullPolicy: Always
         command:
         - sleep
@@ -1004,10 +1024,7 @@ test_block_unregistered_images() {
     case $prerequisites_met in
         [Yy]*)
             echo
-            read -p "Enter an image to deploy for this test [default: $AQUA_PROBE_IMAGE]: " unregistered_image
-            if [ -z "$unregistered_image" ]; then
-                unregistered_image="$AQUA_PROBE_IMAGE"
-            fi
+            unregistered_image=$(prompt_for_test_image "Enter image to deploy for the unregistered image test")
 
             echo
             print_colored_message yellow "Deploying unregistered image test container with image: $unregistered_image"
@@ -1184,6 +1201,7 @@ test_limit_container_privileges() {
     case $prerequisites_met in
         [Yy]*)
             echo
+            privilege_test_image=$(prompt_for_test_image "Enter image to deploy for the Limit Container Privileges tests")
             print_colored_message yellow "Cleaning up previous Limit Container Privileges test pods..."
             ensure_test_namespace
             kubectl delete pod host-network-test cap-add-test root-user-test privileged-test host-ipc-test host-pid-test host-userns-test host-uts-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -1199,7 +1217,7 @@ spec:
   hostNetwork: true
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     command: ["sleep","3600"]
 EOF
@@ -1215,7 +1233,7 @@ metadata:
 spec:
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     securityContext:
       capabilities:
@@ -1236,7 +1254,7 @@ metadata:
 spec:
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     securityContext:
       runAsUser: 0
@@ -1255,7 +1273,7 @@ metadata:
 spec:
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     securityContext:
       privileged: true
@@ -1274,7 +1292,7 @@ spec:
   hostIPC: true
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     command: ["sleep","3600"]
 EOF
@@ -1291,7 +1309,7 @@ spec:
   hostPID: true
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     command: ["sleep","3600"]
 EOF
@@ -1308,7 +1326,7 @@ spec:
   hostUsers: true
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     command: ["sleep","3600"]
 EOF
@@ -1325,7 +1343,7 @@ spec:
   hostNetwork: true
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $privilege_test_image
     imagePullPolicy: Always
     command: ["sleep","3600"]
 EOF
@@ -1367,11 +1385,12 @@ test_block_non_kubernetes_containers() {
     case $prerequisites_met in
         [Yy]*)
             echo
-            print_colored_message yellow "Deploying Docker-only container with image: $AQUA_PROBE_IMAGE"
+            non_k8s_image=$(prompt_for_test_image "Enter image to deploy for the non-Kubernetes container test")
+            print_colored_message yellow "Deploying Docker-only container with image: $non_k8s_image"
             echo
-            echo "docker run -d --name aqua-non-k8s-container $AQUA_PROBE_IMAGE sleep 3600"
+            echo "docker run -d --name aqua-non-k8s-container $non_k8s_image sleep 3600"
             docker rm -f aqua-non-k8s-container >/dev/null 2>&1
-            docker run -d --name aqua-non-k8s-container $AQUA_PROBE_IMAGE sleep 3600
+            docker run -d --name aqua-non-k8s-container $non_k8s_image sleep 3600
             echo
             print_colored_message yellow "[!] Observe that the Docker-only container is blocked because it was started outside Kubernetes."
             echo
@@ -1481,7 +1500,8 @@ test_volumes_blocked() {
             fi
 
             echo
-            print_colored_message yellow "Deploying volume block test pod with hostPath '$blocked_host_path' mounted at '$blocked_mount_path'..."
+            volume_test_image=$(prompt_for_test_image "Enter image to deploy for the Volumes Blocked test")
+            print_colored_message yellow "Deploying volume block test pod with image '$volume_test_image' and hostPath '$blocked_host_path' mounted at '$blocked_mount_path'..."
             echo
             ensure_test_namespace
             kubectl delete pod volume-block-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -1493,7 +1513,7 @@ metadata:
 spec:
   containers:
   - name: test
-    image: $AQUA_PROBE_IMAGE
+    image: $volume_test_image
     imagePullPolicy: Always
     command: ["sleep","3600"]
     volumeMounts:
@@ -1546,7 +1566,8 @@ test_block_non_compliant_resources() {
     case $prerequisites_met in
         [Yy]*)
             echo
-            print_colored_message yellow "Applying non-compliant Kubernetes resource examples with image: $AQUA_PROBE_IMAGE"
+            non_compliant_resource_image=$(prompt_for_test_image "Enter image to deploy for the non-compliant resource tests")
+            print_colored_message yellow "Applying non-compliant Kubernetes resource examples with image: $non_compliant_resource_image"
             echo
             kubectl create namespace $lab_namespace --dry-run=client -o yaml | kubectl apply -f -
             apply_non_compliant_resource "host-ipc-bad" <<EOF
@@ -1559,7 +1580,7 @@ spec:
   hostIPC: true
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "host-pid-bad" <<EOF
@@ -1572,7 +1593,7 @@ spec:
   hostPID: true
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "host-network-bad" <<EOF
@@ -1585,7 +1606,7 @@ spec:
   hostNetwork: true
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "host-port-bad" <<EOF
@@ -1597,7 +1618,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     ports:
     - containerPort: 80
@@ -1612,7 +1633,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "anonymous-view-bad" <<EOF
@@ -1638,7 +1659,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     resources:
       requests:
@@ -1653,7 +1674,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     resources:
       limits:
@@ -1668,7 +1689,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       allowPrivilegeEscalation: true
@@ -1702,7 +1723,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       capabilities:
@@ -1718,7 +1739,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "delete-pod-logs-bad" <<EOF
@@ -1752,7 +1773,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "disallowed-hostpath-bad" <<EOF
@@ -1764,7 +1785,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     volumeMounts:
     - name: host-etc
@@ -1873,7 +1894,7 @@ spec:
     - "internal.service.local"
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "memory-limit-missing-bad" <<EOF
@@ -1885,7 +1906,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     resources:
       requests:
@@ -1900,7 +1921,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     resources:
       limits:
@@ -1915,7 +1936,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       capabilities:
@@ -1931,7 +1952,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       procMount: Unmasked
@@ -1945,7 +1966,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     ports:
     - containerPort: 80
@@ -1959,7 +1980,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       privileged: true
@@ -1973,7 +1994,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       readOnlyRootFilesystem: false
@@ -1987,7 +2008,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       runAsUser: 0
@@ -2001,7 +2022,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       runAsGroup: 1000
@@ -2015,7 +2036,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       runAsUser: 1000
@@ -2031,7 +2052,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "seccomp-unconfined-bad" <<EOF
@@ -2046,7 +2067,7 @@ spec:
       type: Unconfined
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "selinux-custom-bad" <<EOF
@@ -2058,7 +2079,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       seLinuxOptions:
@@ -2076,7 +2097,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       capabilities:
@@ -2092,7 +2113,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       capabilities:
@@ -2123,7 +2144,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     securityContext:
       capabilities:
@@ -2145,7 +2166,7 @@ spec:
       value: "1"
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "user-admin-access-bad" <<EOF
@@ -2171,7 +2192,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
 EOF
             apply_non_compliant_resource "docker-sock-hostpath-bad" <<EOF
@@ -2183,7 +2204,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     volumeMounts:
     - name: docker-sock
@@ -2203,7 +2224,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: $AQUA_PROBE_IMAGE
+    image: $non_compliant_resource_image
     imagePullPolicy: Always
     volumeMounts:
     - name: host-var-log
@@ -2279,7 +2300,8 @@ EOF
             unset openai_api_key_b64
 
             echo
-            print_colored_message yellow "Deploying Secure AI - Discovery sample app..."
+            secure_ai_image=$(prompt_for_test_image "Enter image to deploy for the Secure AI - Discovery app")
+            print_colored_message yellow "Deploying Secure AI - Discovery sample app with image: $secure_ai_image"
             kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -2299,7 +2321,7 @@ spec:
     spec:
       containers:
         - name: $ai_app_name
-          image: ericgomes56/ai-app:1.0
+          image: $secure_ai_image
           imagePullPolicy: Always
           ports:
             - containerPort: 8501
