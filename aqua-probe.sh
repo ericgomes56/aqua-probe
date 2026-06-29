@@ -1536,7 +1536,7 @@ test_block_non_compliant_resources() {
             print_colored_message yellow "Applying non-compliant Kubernetes resource examples with image: $AQUA_PROBE_IMAGE"
             echo
             kubectl create namespace $lab_namespace --dry-run=client -o yaml | kubectl apply -f -
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "host-ipc-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1548,7 +1548,8 @@ spec:
   - name: app
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
