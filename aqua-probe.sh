@@ -1795,7 +1795,7 @@ rules:
   resources: ["pods", "deployments", "daemonsets", "statefulsets", "jobs", "cronjobs"]
   verbs: ["*"]
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "manage-all-resources-bad" <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -1804,7 +1804,8 @@ rules:
 - apiGroups: ["*"]
   resources: ["*"]
   verbs: ["*"]
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
