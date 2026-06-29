@@ -2036,7 +2036,7 @@ spec:
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "selinux-custom-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -2053,7 +2053,8 @@ spec:
         role: "system_r"
         type: "spc_t"
         level: "s0:c123,c456"
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
