@@ -87,5 +87,8 @@ Show the current Aqua Probe build version
 ## Aqua Probe Image
 Container image examples use `ericgomes56/aqua-probe:1.0`.
 
+## Secure AI - Discovery
+After deploying the Secure AI sample app, open the generated LoadBalancer URL using HTTP on port `8501`. In the app, click **Request Simulator** in the bottom-right corner, click **OpenAI**, and send the request. AI Findings should populate in Aqua and an audit event should be generated.
+
 ## Credit
 Aqua Probe is a maintained fork and evolution of Aqua Warden. The project has been rebranded and is actively developed to support Aqua runtime security testing, PoVs, and technical enablement.

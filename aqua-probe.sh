@@ -2347,9 +2347,39 @@ EOF
             print_colored_message yellow "Waiting for Secure AI - Discovery deployment rollout..."
             kubectl rollout status deployment/$ai_app_name -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=120s
             echo
+            print_colored_message yellow "Waiting for LoadBalancer URL..."
+            for i in {1..36}; do
+                ai_lb_hostname=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+                ai_lb_ip=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+
+                if [ -n "$ai_lb_hostname" ]; then
+                    ai_app_url="http://$ai_lb_hostname:8501"
+                    break
+                elif [ -n "$ai_lb_ip" ]; then
+                    ai_app_url="http://$ai_lb_ip:8501"
+                    break
+                fi
+
+                sleep 5
+            done
+
+            if [ -n "$ai_app_url" ]; then
+                print_colored_message green "[✓] Secure AI app URL: $ai_app_url"
+                echo
+                print_colored_message yellow "[!] Open the URL above using HTTP and port 8501."
+            else
+                print_colored_message yellow "[!] LoadBalancer URL is still pending. Run the following command and open the EXTERNAL-IP or hostname using HTTP on port 8501:"
+                echo "kubectl get service $ai_service_name -n $AQUA_PROBE_TEST_NAMESPACE"
+            fi
+            echo
+            print_colored_message yellow "[!] In the app, click Request Simulator in the bottom-right corner, click OpenAI, and send the request."
+            echo
+            print_colored_message yellow "[!] Notice that AI Findings populates in Aqua and an audit event is generated."
+            echo
             print_colored_message yellow "[!] Observe that the AI application is discovered by Aqua Secure AI controls."
             echo
             print_colored_message green "[✓] Please login to the Aqua Console and review Secure AI discovery findings for the deployed AI application."
+            unset ai_lb_hostname ai_lb_ip ai_app_url
             ;;
         [Nn]*)
             echo "Please ensure the prerequisites are met before proceeding."
