@@ -1646,7 +1646,7 @@ spec:
       limits:
         cpu: "500m"
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "allow-privilege-escalation-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1659,7 +1659,8 @@ spec:
     imagePullPolicy: Always
     securityContext:
       allowPrivilegeEscalation: true
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
