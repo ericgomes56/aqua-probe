@@ -2340,7 +2340,7 @@ spec:
     app: $ai_app_name
   ports:
     - protocol: TCP
-      port: 80
+      port: 8501
       targetPort: 8501
 EOF
             echo
