@@ -1562,7 +1562,7 @@ spec:
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "host-network-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1574,7 +1574,8 @@ spec:
   - name: app
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
