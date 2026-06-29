@@ -961,8 +961,7 @@ test_block_non_compliant_images() {
     case $prerequisites_met in
         [Yy]*)
             echo
-            non_compliant_image=$(prompt_for_test_image "Enter image to deploy for the non-compliant image test")
-            print_colored_message yellow "Deploying non-compliant image test container with image: $non_compliant_image"
+            print_colored_message yellow "Deploying non-compliant image test container with image: jerbi/eicar:latest"
             echo
             ensure_test_namespace
             kubectl delete deployment aqua-non-compliant-image-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -983,7 +982,7 @@ spec:
     spec:
       containers:
       - name: eicar
-        image: $non_compliant_image
+        image: jerbi/eicar:latest
         imagePullPolicy: Always
         command:
         - sleep
@@ -2300,8 +2299,7 @@ EOF
             unset openai_api_key_b64
 
             echo
-            secure_ai_image=$(prompt_for_test_image "Enter image to deploy for the Secure AI - Discovery app")
-            print_colored_message yellow "Deploying Secure AI - Discovery sample app with image: $secure_ai_image"
+            print_colored_message yellow "Deploying Secure AI - Discovery sample app with image: ericgomes56/ai-app:1.0"
             kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -2321,7 +2319,7 @@ spec:
     spec:
       containers:
         - name: $ai_app_name
-          image: $secure_ai_image
+          image: ericgomes56/ai-app:1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8501
