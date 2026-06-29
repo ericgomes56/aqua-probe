@@ -1719,7 +1719,7 @@ rules:
   resources: ["pods/log"]
   verbs: ["delete"]
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "pod-exec-bad" <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -1729,7 +1729,8 @@ rules:
 - apiGroups: [""]
   resources: ["pods/exec"]
   verbs: ["create"]
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
