@@ -1979,7 +1979,7 @@ spec:
     securityContext:
       runAsUser: 0
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "low-gid-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1992,7 +1992,8 @@ spec:
     imagePullPolicy: Always
     securityContext:
       runAsGroup: 1000
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
