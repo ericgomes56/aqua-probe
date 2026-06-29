@@ -320,6 +320,14 @@ cleanup_aqua_probe_artifacts() {
     fi
 }
 
+apply_non_compliant_resource() {
+    local resource_name="$1"
+
+    echo
+    print_colored_message yellow "Applying non-compliant resource: $resource_name"
+    kubectl apply -f -
+}
+
 cleanup_non_compliant_resources_lab() {
     local lab_namespace="aqua-controls-lab"
     local lab_pods=(
