@@ -1708,7 +1708,7 @@ spec:
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "delete-pod-logs-bad" <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -1718,7 +1718,8 @@ rules:
 - apiGroups: [""]
   resources: ["pods/log"]
   verbs: ["delete"]
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
