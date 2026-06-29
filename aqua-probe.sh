@@ -1837,7 +1837,7 @@ rules:
   resources: ["secrets"]
   verbs: ["*"]
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "webhookconfig-manager-bad" <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -1846,7 +1846,8 @@ rules:
 - apiGroups: ["admissionregistration.k8s.io"]
   resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
   verbs: ["*"]
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
