@@ -2101,7 +2101,7 @@ spec:
   - port: 80
     targetPort: 80
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "specific-capability-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -2116,7 +2116,8 @@ spec:
       capabilities:
         add:
         - CHOWN
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
