@@ -1761,7 +1761,7 @@ spec:
     hostPath:
       path: /etc
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "rbac-manager-bad" <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -1770,7 +1770,8 @@ rules:
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
   verbs: ["*"]
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
