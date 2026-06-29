@@ -1616,7 +1616,7 @@ roleRef:
   name: view
   apiGroup: rbac.authorization.k8s.io
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "cpu-limit-missing-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1630,7 +1630,8 @@ spec:
     resources:
       requests:
         cpu: "100m"
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
