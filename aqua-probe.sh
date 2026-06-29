@@ -1590,7 +1590,7 @@ spec:
     - containerPort: 80
       hostPort: 8080
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "non-compliant-image-domain-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1601,7 +1601,8 @@ spec:
   - name: app
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
