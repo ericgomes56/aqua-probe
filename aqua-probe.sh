@@ -1602,7 +1602,7 @@ spec:
     image: $AQUA_PROBE_IMAGE
     imagePullPolicy: Always
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "anonymous-view-bad" <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -1615,7 +1615,8 @@ roleRef:
   kind: ClusterRole
   name: view
   apiGroup: rbac.authorization.k8s.io
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
