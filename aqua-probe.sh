@@ -1965,7 +1965,7 @@ spec:
     securityContext:
       readOnlyRootFilesystem: false
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "runs-as-root-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1978,7 +1978,8 @@ spec:
     imagePullPolicy: Always
     securityContext:
       runAsUser: 0
----
+EOF
+            kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
