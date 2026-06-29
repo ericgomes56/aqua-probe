@@ -2181,7 +2181,7 @@ spec:
       path: /var/run/docker.sock
       type: Socket
 EOF
-            kubectl apply -f - <<EOF
+            apply_non_compliant_resource "hostpath-volume-bad" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
