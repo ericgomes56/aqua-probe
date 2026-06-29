@@ -35,6 +35,7 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
 2. Run the script by executing `./aqua-probe.sh`.
 3. Follow the on-screen prompts to deploy the test container and perform security tests.
+4. Kubernetes test resources are created in the `aqua-probe-lab` namespace.
 
 ## Requirements
 - Bash shell
