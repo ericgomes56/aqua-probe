@@ -1,4 +1,4 @@
-FROM centos:8
+FROM centos:7.9.2009
 
 # Copy the repo.txt file to the container.
 COPY repo.txt /tmp/repo.txt
