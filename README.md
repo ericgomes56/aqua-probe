@@ -29,9 +29,10 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 18. Test Port Scanning Detection
 19. Test Real-time Malware Protection with delete action
 20. Test Secure AI - Discovery
-21. Test Secure AI - Unauthorized Models
-22. Test System Integrity Monitoring
-23. Test Volumes Blocked
+21. Test Secure AI - Protection
+22. Test Secure AI - Unauthorized Models
+23. Test System Integrity Monitoring
+24. Test Volumes Blocked
 
 ## Usage
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
@@ -90,6 +91,9 @@ Container image examples use `ericgomes56/aqua-probe:1.0`.
 
 ## Secure AI - Discovery
 After deploying the Secure AI sample app, open the generated LoadBalancer URL using HTTP on port `8501`. In the app, click **Request Simulator** in the bottom-right corner, click **OpenAI**, and send the request. AI Findings should populate in Aqua and an audit event should be generated.
+
+## Secure AI - Protection
+This is an Aqua SaaS tenant feature only and is not supported for on-prem Aqua tenants. Enable Prompt Protection Settings under **Administration -> Integrations -> Secure AI**. Use the same Secure AI sample app unless it was cleaned up with the Terminate Program option. Open the generated LoadBalancer URL using HTTP on port `8501`. In the app, click **Attack Library** in the bottom-right corner and choose any one of the examples there. Secure AI Protection should evaluate the prompt, and AI Findings and audit events should be generated in Aqua.
 
 ## Secure AI - Unauthorized Models
 Use the same Secure AI sample app unless it was cleaned up with the Terminate Program option. Configure the Aqua policy with Service `OpenAI` and Model Name `gpt-4`, which should appear as `OpenAI@gpt-4`. Open the generated LoadBalancer URL using HTTP on port `8501`. In the app, click **Request Simulator** in the bottom-right corner, click **OpenAI**, choose model override type `gpt-4`, and send the request. AI Findings should populate in Aqua and an audit event should be generated.
