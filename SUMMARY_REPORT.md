@@ -15,9 +15,9 @@
 - `AQUA_WARDEN_SKIP_INSTRUCTIONS` -> `AQUA_PROBE_SKIP_INSTRUCTIONS`
 
 ## Image References Updated
-- `stanhoe/aqua-warden:latest` -> `ericgomes56/aqua-probe:1.0`
-- Default `--image` help text and runtime default now use `ericgomes56/aqua-probe:1.0`
-- README image examples now use `ericgomes56/aqua-probe:1.0`
+- `stanhoe/aqua-warden:latest` -> `ericgomes56/aqua-probe:2.0`
+- Default `--image` help text and runtime default now use `ericgomes56/aqua-probe:2.0`
+- README image examples now use `ericgomes56/aqua-probe:2.0`
 
 ## Documentation Changes Made
 - Project name updated to `Aqua Probe`
@@ -29,4 +29,4 @@
 
 ## Manual Review Items
 - `user-guide/Aqua-Probe_Userguide.pdf` was searched for extractable legacy text and the old source URL was patched. If the PDF contains screenshots with previous branding, regenerate the source document and export a refreshed PDF.
-- The external container image `ericgomes56/aqua-probe:1.0` should be published before users run the default examples.
+- The external container image `ericgomes56/aqua-probe:2.0` should be published before users run the default examples.

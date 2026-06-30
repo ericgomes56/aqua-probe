@@ -45,7 +45,7 @@ print_help() {
   echo "Options:"
   echo "  --daemonset <value>, -d <value>         Set the custom daemonset name where the Aqua Enforcer is deployed (default: aqua-agent,kube-enforcer-ds)"
   echo "  --help, -h                              Show this help message and exit"
-  echo "  --image <value>, -i <value>             Set the Aqua Probe test image name (default: ericgomes56/aqua-probe:1.0)"
+  echo "  --image <value>, -i <value>             Set the Aqua Probe test image name (default: ericgomes56/aqua-probe:2.0)"
   echo "  --namespace <value>, -ns <value>        Set the custom namespace where the Aqua Enforcer is deployed (default: aqua)"
   echo "  --no-instructions, -n                   Skip prerequisites instructions"
   echo "  --version, -v                           Show the current Aqua Probe build version"
@@ -54,7 +54,7 @@ print_help() {
 }
 
 handle_flags() {
-  export AQUA_PROBE_IMAGE="ericgomes56/aqua-probe:1.0"
+  export AQUA_PROBE_IMAGE="ericgomes56/aqua-probe:2.0"
   export AQUA_PROBE_NAMESPACE="aqua"
   export AQUA_PROBE_TEST_NAMESPACE="aqua-probe-lab"
 
@@ -232,7 +232,7 @@ ensure_test_namespace() {
 
 prompt_for_test_image() {
     local prompt_message="$1"
-    local default_image="${AQUA_PROBE_IMAGE:-ericgomes56/aqua-probe:1.0}"
+    local default_image="${AQUA_PROBE_IMAGE:-ericgomes56/aqua-probe:2.0}"
     local selected_image
 
     printf "%s [default: %s]: " "$prompt_message" "$default_image" >&2

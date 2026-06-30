@@ -39,14 +39,14 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 2. Run the script by executing `./aqua-probe.sh`.
 3. Follow the on-screen prompts to deploy the test container and perform security tests.
 4. Kubernetes test resources are created in the `aqua-probe-lab` namespace.
-5. Deployment prompts let you specify a custom image, or press Enter to use `ericgomes56/aqua-probe:1.0`.
+5. Deployment prompts let you specify a custom image, or press Enter to use `ericgomes56/aqua-probe:2.0`.
 
 ## Requirements
 - Bash shell
 - `kubectl` configured to connect to a Kubernetes cluster
 - Aqua Enforcer daemonset deployed in the Kubernetes cluster
-- Internet access to a Docker registry or the ability to push the Aqua Probe test image (ericgomes56/aqua-probe:1.0) to a local registry
-- Permissions to deploy container in the Kubernetes cluster (ericgomes56/aqua-probe:1.0)
+- Internet access to a Docker registry or the ability to push the Aqua Probe test image (ericgomes56/aqua-probe:2.0) to a local registry
+- Permissions to deploy container in the Kubernetes cluster (ericgomes56/aqua-probe:2.0)
 
 ## Installation
 1. Clone this repository to your local machine
@@ -54,7 +54,7 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 
 ## Usage Example
 ```bash
-# Default mode - utilizes ericgomes56/aqua-probe:1.0 image
+# Default mode - utilizes ericgomes56/aqua-probe:2.0 image
 ./aqua-probe.sh
 
 # Advanced mode
@@ -73,7 +73,7 @@ Show help menu which contains the list of commands
 ```bash
 ./aqua-probe.sh --help, -h
 ```
-Reference local registry image (default: ericgomes56/aqua-probe:1.0)
+Reference local registry image (default: ericgomes56/aqua-probe:2.0)
 ```bash
 ./aqua-probe.sh --image <image_name>, -i <image_name>
 ```
@@ -87,7 +87,7 @@ Show the current Aqua Probe build version
 ```
 
 ## Aqua Probe Image
-Container image examples use `ericgomes56/aqua-probe:1.0`.
+Container image examples use `ericgomes56/aqua-probe:2.0`.
 
 ## Credit
 Aqua Probe is a maintained fork and evolution of Aqua Warden. The project has been rebranded and is actively developed to support Aqua runtime security testing, PoVs, and technical enablement.
