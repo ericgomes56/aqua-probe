@@ -488,25 +488,20 @@ test_drift_prevention() {
 
     case $prerequisites_met in
         [Yy]*)
-            # Make a copy of /bin/date as a new executable and run it
+            # Make a copy of /bin/wget and execute the copy
             if check_container_existence; then
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Copying '/bin/date' to '/bin/slate' in the container..."
+                print_colored_message yellow "Copying '/bin/wget' to '/tmp/wget_copy' in the container..."
                 echo
-                echo "kubectl exec -n $AQUA_PROBE_TEST_NAMESPACE -it $pod_name --container $container_name -- cp /bin/date /bin/slate"
-                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- cp /bin/date /bin/slate
+                echo "kubectl exec -n $AQUA_PROBE_TEST_NAMESPACE -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy"
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy
                 echo
-                print_colored_message yellow "Making '/bin/slate' executable in the container..."
+                print_colored_message yellow "Executing '/tmp/wget_copy' command in the container..."
                 echo
-                echo "kubectl exec -n $AQUA_PROBE_TEST_NAMESPACE -it $pod_name --container $container_name -- chmod +x /bin/slate"
-                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- chmod +x /bin/slate
-                echo
-                print_colored_message yellow "Executing '/bin/slate' command in the container..."
-                echo
-                echo "kubectl exec -n $AQUA_PROBE_TEST_NAMESPACE -it $pod_name --container $container_name -- /bin/slate"
-                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- /bin/slate
+                echo "kubectl exec -n $AQUA_PROBE_TEST_NAMESPACE -it $pod_name --container $container_name -- /tmp/wget_copy google.com"
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- /tmp/wget_copy google.com
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
@@ -547,9 +542,9 @@ test_block_cryptocurrency_mining() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing 'curl us-east.cryptonight-hub.miningpoolhub.com:205' command in the container..."
+                print_colored_message yellow "Executing 'wget us-east.cryptonight-hub.miningpoolhub.com:205' command in the container..."
                 echo
-                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- curl us-east.cryptonight-hub.miningpoolhub.com:205
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- wget us-east.cryptonight-hub.miningpoolhub.com:205
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
