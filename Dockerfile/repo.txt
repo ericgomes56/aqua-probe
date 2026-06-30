@@ -1,17 +1,20 @@
 [base]
 name=CentOS-7 - Base
-baseurl=https://vault.centos.org/7.9.2009/os/$basearch/
+baseurl=http://vault.centos.org/centos/7.9.2009/os/$basearch/
 gpgcheck=0
+sslverify=0
 enabled=1
 
 [updates]
 name=CentOS-7 - Updates
-baseurl=https://vault.centos.org/7.9.2009/updates/$basearch/
+baseurl=http://vault.centos.org/centos/7.9.2009/updates/$basearch/
 gpgcheck=0
+sslverify=0
 enabled=1
 
 [extras]
 name=CentOS-7 - Extras
-baseurl=https://vault.centos.org/7.9.2009/extras/$basearch/
+baseurl=http://vault.centos.org/centos/7.9.2009/extras/$basearch/
 gpgcheck=0
+sslverify=0
 enabled=1
