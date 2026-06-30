@@ -547,9 +547,9 @@ test_block_cryptocurrency_mining() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing 'wget us-east.cryptonight-hub.miningpoolhub.com:205' command in the container..."
+                print_colored_message yellow "Executing 'curl us-east.cryptonight-hub.miningpoolhub.com:205' command in the container..."
                 echo
-                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- wget us-east.cryptonight-hub.miningpoolhub.com:205
+                kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- curl us-east.cryptonight-hub.miningpoolhub.com:205
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
