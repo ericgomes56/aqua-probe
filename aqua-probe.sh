@@ -2391,6 +2391,175 @@ EOF
 }
 
 
+# Secure AI - Unauthorized Models
+test_secure_ai_unauthorized_models() {
+    local ai_app_name="mars-banking-app"
+    local ai_service_name="mars-banking-app-lb"
+    local openai_secret_name="openai-api-key"
+    local ai_app_exists
+
+    if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
+        prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
+    else
+        # Ask user if prerequisites are met
+        echo
+        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        1. Create or update the Aqua policy required for Secure AI Unauthorized Models
+        2. In the policy, select OpenAI for the Service dropdown
+        3. In the policy, set Model Name to 'gpt-4'
+        4. Confirm the policy entry looks like 'OpenAI@gpt-4'
+        5. Ensure that the policy is applied to namespace '$AQUA_PROBE_TEST_NAMESPACE'
+        6. Have an OpenAI API key ready. It will be collected as sensitive input and stored as a Kubernetes secret named '$openai_secret_name'"
+        echo
+        read -p "Proceed? (y/n): " prerequisites_met
+    fi
+
+    case $prerequisites_met in
+        [Yy]*)
+            echo
+            read -s -p "Enter OpenAI API key for the AI unauthorized models test: " openai_api_key
+            echo
+
+            if [ -z "$openai_api_key" ]; then
+                print_colored_message red "OpenAI API key cannot be empty. Aborting Secure AI - Unauthorized Models deployment."
+                return
+            fi
+
+            openai_api_key_b64=$(printf '%s' "$openai_api_key" | base64 | tr -d '\n')
+            unset openai_api_key
+
+            ensure_test_namespace
+            echo
+            print_colored_message yellow "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
+            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $openai_secret_name
+type: Opaque
+data:
+  OPENAI_API_KEY: $openai_api_key_b64
+EOF
+            unset openai_api_key_b64
+
+            if kubectl get deployment "$ai_app_name" -n "$AQUA_PROBE_TEST_NAMESPACE" >/dev/null 2>&1; then
+                ai_app_exists="true"
+                echo
+                print_colored_message yellow "Existing Secure AI sample app found. Reusing deployment '$ai_app_name' for this test."
+                kubectl rollout restart deployment/$ai_app_name -n "$AQUA_PROBE_TEST_NAMESPACE"
+            else
+                ai_app_exists="false"
+            fi
+
+            if [ "$ai_app_exists" != "true" ]; then
+                echo
+                print_colored_message yellow "Deploying Secure AI sample app with image: ericgomes56/ai-app:1.0"
+                kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: $ai_app_name
+  labels:
+    app: $ai_app_name
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: $ai_app_name
+  template:
+    metadata:
+      labels:
+        app: $ai_app_name
+    spec:
+      containers:
+        - name: $ai_app_name
+          image: ericgomes56/ai-app:1.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8501
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: $openai_secret_name
+                  key: OPENAI_API_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: $ai_service_name
+spec:
+  type: LoadBalancer
+  selector:
+    app: $ai_app_name
+  ports:
+    - protocol: TCP
+      port: 8501
+      targetPort: 8501
+EOF
+            else
+                kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" >/dev/null 2>&1 || kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: $ai_service_name
+spec:
+  type: LoadBalancer
+  selector:
+    app: $ai_app_name
+  ports:
+    - protocol: TCP
+      port: 8501
+      targetPort: 8501
+EOF
+            fi
+
+            echo
+            print_colored_message yellow "Waiting for Secure AI deployment rollout..."
+            kubectl rollout status deployment/$ai_app_name -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=120s
+            echo
+            print_colored_message yellow "Waiting for LoadBalancer URL..."
+            for i in {1..36}; do
+                ai_lb_hostname=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+                ai_lb_ip=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+
+                if [ -n "$ai_lb_hostname" ]; then
+                    ai_app_url="http://$ai_lb_hostname:8501"
+                    break
+                elif [ -n "$ai_lb_ip" ]; then
+                    ai_app_url="http://$ai_lb_ip:8501"
+                    break
+                fi
+
+                sleep 5
+            done
+
+            if [ -n "$ai_app_url" ]; then
+                print_colored_message green "[✓] Secure AI app URL: $ai_app_url"
+                echo
+                print_colored_message yellow "[!] Open the URL above using HTTP and port 8501."
+            else
+                print_colored_message yellow "[!] LoadBalancer URL is still pending. Run the following command and open the EXTERNAL-IP or hostname using HTTP on port 8501:"
+                echo "kubectl get service $ai_service_name -n $AQUA_PROBE_TEST_NAMESPACE"
+            fi
+            echo
+            print_colored_message yellow "[!] In the app, click Request Simulator in the bottom-right corner, click OpenAI, choose model override type 'gpt-4', and send the request."
+            echo
+            print_colored_message yellow "[!] Notice that AI Findings populates in Aqua and an audit event is generated for the unauthorized model request."
+            echo
+            print_colored_message green "[✓] Please login to the Aqua Console and review Secure AI findings and audit events for OpenAI@gpt-4."
+            unset ai_lb_hostname ai_lb_ip ai_app_url ai_app_exists
+            ;;
+        [Nn]*)
+            echo "Please ensure the prerequisites are met before proceeding."
+            ;;
+        *)
+            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            ;;
+    esac
+}
+
+
 # Terminate the program
 terminate_program() {
     read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
@@ -2470,12 +2639,13 @@ main() {
         echo "18. Test Port Scanning Detection"
         echo "19. Test Real-time Malware Protection [Delete action]"
         echo "20. Test Secure AI - Discovery"
-        echo "21. Test System Integrity Monitoring"
-        echo "22. Test Volumes Blocked"
-        echo "23. Terminate Program"
+        echo "21. Test Secure AI - Unauthorized Models"
+        echo "22. Test System Integrity Monitoring"
+        echo "23. Test Volumes Blocked"
+        echo "24. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-23): " choice
+        read -p "Enter your choice (1-24): " choice
 
         case $choice in
             1)
@@ -2539,12 +2709,15 @@ main() {
                 test_secure_ai_discovery
                 ;;
             21)
-                test_system_integrity_monitoring
+                test_secure_ai_unauthorized_models
                 ;;
             22)
-                test_volumes_blocked
+                test_system_integrity_monitoring
                 ;;
             23)
+                test_volumes_blocked
+                ;;
+            24)
                 terminate_program
                 ;;
         esac

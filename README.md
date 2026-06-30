@@ -29,8 +29,9 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 18. Test Port Scanning Detection
 19. Test Real-time Malware Protection with delete action
 20. Test Secure AI - Discovery
-21. Test System Integrity Monitoring
-22. Test Volumes Blocked
+21. Test Secure AI - Unauthorized Models
+22. Test System Integrity Monitoring
+23. Test Volumes Blocked
 
 ## Usage
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
@@ -89,6 +90,9 @@ Container image examples use `ericgomes56/aqua-probe:1.0`.
 
 ## Secure AI - Discovery
 After deploying the Secure AI sample app, open the generated LoadBalancer URL using HTTP on port `8501`. In the app, click **Request Simulator** in the bottom-right corner, click **OpenAI**, and send the request. AI Findings should populate in Aqua and an audit event should be generated.
+
+## Secure AI - Unauthorized Models
+Use the same Secure AI sample app unless it was cleaned up with the Terminate Program option. Configure the Aqua policy with Service `OpenAI` and Model Name `gpt-4`, which should appear as `OpenAI@gpt-4`. Open the generated LoadBalancer URL using HTTP on port `8501`. In the app, click **Request Simulator** in the bottom-right corner, click **OpenAI**, choose model override type `gpt-4`, and send the request. AI Findings should populate in Aqua and an audit event should be generated.
 
 ## Credit
 Aqua Probe is a maintained fork and evolution of Aqua Warden. The project has been rebranded and is actively developed to support Aqua runtime security testing, PoVs, and technical enablement.
