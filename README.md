@@ -33,6 +33,37 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 22. Test Secure AI - Unauthorized Models
 23. Test System Integrity Monitoring
 24. Test Volumes Blocked
+25. Test Brute Force Login Detection [Host Runtime Policy]
+
+## Host Runtime Policies
+
+Brute Force Login Detection uses a **Host Runtime Policy**, with an Aqua Enforcer monitoring the target Linux host. Run it from menu option 25, or run it directly without Kubernetes startup checks:
+
+```bash
+./aqua-probe.sh --host-runtime
+```
+
+Enable Brute Force Login Detection in the Host Runtime Policy applied to the target. The target SSH service must accept password authentication. Supply its hostname/IP, SSH port, and a dedicated test account. Check account lockout settings, then enter an intentionally incorrect password at each SSH prompt. The script defaults to five attempts and permits up to ten per run; align the count and timing with your policy's detection threshold/window. Passwords are handled interactively by SSH and are not stored by Aqua Probe. SSH host-key verification remains enabled.
+
+Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created; authentication and audit records remain for review. Menu option 26 terminates the program and runs the existing cleanup.
+
+Host Runtime controls include the following catalog supplied for this project. Brute Force Login Detection is the host test implemented here; the other entries are not additional host test functions. Shared signatures do not make the existing container tests Host Runtime Policy tests. Availability depends on the target OS and tenant configuration, particularly for Windows registry controls.
+
+- Block Cryptocurrency Mining
+- Brute Force Login Detection
+- DNS/IP Reputation
+- File Block
+- File Integrity Monitoring
+- Forensics
+- OS Users and Groups Allowed
+- OS Users and Groups Blocked
+- Package Block
+- Port Scanning Detection
+- Secure AI - Discovery
+- Secure AI - Unauthorized Models
+- System Integrity Monitoring
+- Windows Registry Monitoring
+- Windows Registry Protection
 
 ## Usage
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.

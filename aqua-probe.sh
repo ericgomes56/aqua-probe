@@ -48,6 +48,7 @@ print_help() {
   echo "  --image <value>, -i <value>             Set the Aqua Probe test image name (default: ericgomes56/aqua-probe:2.0)"
   echo "  --namespace <value>, -ns <value>        Set the custom namespace where the Aqua Enforcer is deployed (default: aqua)"
   echo "  --no-instructions, -n                   Skip prerequisites instructions"
+  echo "  --host-runtime                         Run Brute Force Login Detection without Kubernetes checks"
   echo "  --version, -v                           Show the current Aqua Probe build version"
   echo
   echo
@@ -57,9 +58,14 @@ handle_flags() {
   export AQUA_PROBE_IMAGE="ericgomes56/aqua-probe:2.0"
   export AQUA_PROBE_NAMESPACE="aqua"
   export AQUA_PROBE_TEST_NAMESPACE="aqua-probe-lab"
+  AQUA_PROBE_HOST_RUNTIME=0
 
   while [[ $# -gt 0 ]]; do  # Loop until all arguments are processed
     case "$1" in
+      --host-runtime)
+        AQUA_PROBE_HOST_RUNTIME=1
+        shift
+        ;;
     # Help flag 
       --help | -h)
         print_help
@@ -2753,6 +2759,61 @@ terminate_program() {
 #
 # Main
 # 
+test_brute_force_login_detection() {
+    local host login_user port attempts proceed attempt status
+
+    print_colored_message yellow "Brute Force Login Detection - Host Runtime Policy"
+    echo "Apply a Host Runtime Policy with Brute Force Login Detection enabled to the target Linux host."
+    echo "Ensure the host is monitored by an Aqua Enforcer and its SSH service accepts password authentication."
+    echo "Use a dedicated test account and check its lockout settings before testing."
+    echo "Enter an intentionally incorrect password at each SSH password prompt; no passwords are stored by this script."
+    echo "Choose an attempt count that meets your configured detection threshold/window (maximum 10 per run)."
+    echo "This test connects directly to host SSH; it does not deploy or exec into a container."
+    command -v ssh >/dev/null 2>&1 || { echo "OpenSSH client is required."; return 1; }
+    read -r -p "Monitored host IP or hostname: " host || return
+    if [[ ! "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]]; then
+        echo "Invalid hostname or IP address."; return 1
+    fi
+    read -r -p "Dedicated test account username: " login_user || return
+    if [[ ! "$login_user" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
+        echo "Invalid username."; return 1
+    fi
+    read -r -p "SSH port [22]: " port || return
+    port=${port:-22}
+    if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
+        echo "Invalid SSH port."; return 1
+    fi
+    read -r -p "Number of login attempts [5, maximum 10]: " attempts || return
+    attempts=${attempts:-5}
+    if [[ ! "$attempts" =~ ^([1-9]|10)$ ]]; then
+        echo "Enter an attempt count from 1 to 10."; return 1
+    fi
+    read -r -p "Proceed with $attempts test logins to $host? (y/n): " proceed || return
+    [[ "$proceed" =~ ^[Yy]$ ]] || return 0
+
+    for ((attempt=1; attempt<=attempts; attempt++)); do
+        echo "Login attempt $attempt/$attempts: enter an incorrect password."
+        if ssh -p "$port" -l "$login_user" \
+            -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+            -o NumberOfPasswordPrompts=1 -o ConnectTimeout=5 -o ConnectionAttempts=1 \
+            -o ControlMaster=no -o ControlPath=none "$host" true; then
+            echo "Authentication succeeded unexpectedly; stopping the test."
+            return 1
+        else
+            status=$?
+        fi
+        if [[ "$status" -ne 255 ]]; then
+            echo "SSH stopped with status $status; ending the test."
+            return 1
+        fi
+        echo "SSH did not complete successfully. Verify its output shows an authentication failure, not a connection or host-key error."
+    done
+    echo "Review the host authentication logs to confirm the failed login attempts."
+    print_colored_message green "Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+    echo "An Aqua detection depends on the Host Runtime Policy threshold, time window, and host coverage."
+    echo "No test resources were created; host authentication and audit records remain for review."
+}
+
 main() {
     print_logo
     print_welcome_message
@@ -2760,6 +2821,11 @@ main() {
 
     handle_flags "$@"
     echo
+
+    if [[ "$AQUA_PROBE_HOST_RUNTIME" == 1 ]]; then
+        test_brute_force_login_detection
+        return $?
+    fi
 
     check_kubernetes_connection
     check_aqua_agent_daemonset
@@ -2811,10 +2877,11 @@ main() {
         echo "22. Test Secure AI - Unauthorized Models"
         echo "23. Test System Integrity Monitoring"
         echo "24. Test Volumes Blocked"
-        echo "25. Terminate Program"
+        echo "25. Test Brute Force Login Detection [Host Runtime Policy]"
+        echo "26. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-25): " choice
+        read -p "Enter your choice (1-26): " choice
 
         case $choice in
             1)
@@ -2890,6 +2957,9 @@ main() {
                 test_volumes_blocked
                 ;;
             25)
+                test_brute_force_login_detection
+                ;;
+            26)
                 terminate_program
                 ;;
         esac
