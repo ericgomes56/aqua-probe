@@ -41,6 +41,26 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 30. Test Registries Allowed
 31. Test Brute Force Login Detection [Host Runtime Policy]
 
+## Limit Container Privileges
+
+Menu option 15 uses a Container Runtime Policy with these options from the Aqua UI:
+
+| Platform | Option | Test coverage |
+| --- | --- | --- |
+| Linux | Access to host network | `hostNetwork: true` |
+| Linux | Adding capabilities with --cap-add | `securityContext.capabilities.add: [NET_ADMIN]` |
+| Linux | Configured with 'root' user | `runAsUser: 0` |
+| Linux | Privileged containers | `privileged: true` |
+| Linux | Use the host IPC namespace | `hostIPC: true` |
+| Linux | Use the host PID namespace | `hostPID: true` |
+| Linux | Use the host user namespace | `hostUsers: true`; requires API/runtime support |
+| Linux | Use the host UTS namespace | Separate Docker `--uts=host` test; not automated here |
+| Windows | Port binding lower than 1024 | Compatible Windows image actually binding a low port; not automated here |
+
+The workflow deploys seven Linux pods in `aqua-probe-lab`. Select one restriction at a time to isolate results: root images and shared host namespaces may match multiple restrictions. Confirm Aqua audit evidence before attributing deployment failures to this control.
+
+Kubernetes has no host UTS pod field; `hostNetwork` selects the network namespace only. See the [Kubernetes Pod API](https://kubernetes.io/docs/reference/kubernetes-api/core/pod-v1/) and [Docker UTS documentation](https://docs.docker.com/reference/cli/docker/container/run/#uts). A Docker UTS test needs policy scope covering the Docker container rather than a Kubernetes namespace. The Linux Aqua Probe image cannot validate the Windows-only option, and declaring `containerPort: 80` alone does not create a listener.
+
 ## Dedicated Container Controls
 
 These tests prompt for a custom image (default: `ericgomes56/aqua-probe:2.0`) and prerequisites. They create labeled pods in `aqua-probe-lab` with `imagePullPolicy: Always`. Termination removes those pods, including files created inside them. Prerequisite confirmation remains enabled even with `--no-instructions`. Images need `sleep` plus the commands described below.

@@ -1197,9 +1197,20 @@ test_limit_container_privileges() {
         # Ask user if prerequisites are met
         echo
         print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
-        1. Create a Custom Policy with Limit Container Privileges Control enabled
+        1. Create a Container Runtime Policy with Limit Container Privileges enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
-        3. Ensure that the policy blocks host namespaces, privileged mode, root user, and extra Linux capabilities"
+        3. Linux Only options:
+           - Access to host network
+           - Adding capabilities with --cap-add
+           - Configured with 'root' user
+           - Privileged containers
+           - Use the host IPC namespace
+           - Use the host PID namespace
+           - Use the host user namespace
+           - Use the host UTS namespace
+        4. Windows Only: Port binding lower than 1024 (requires a Windows image and host).
+        5. This workflow deploys seven Linux Kubernetes test pods. Host UTS requires a separate runtime test.
+        6. Scope the policy to aqua-probe-lab. Select one restriction at a time to isolate results; a root image or host namespace may match multiple restrictions."
         echo
         read -p "Proceed? (y/n): " prerequisites_met
     fi
@@ -1220,6 +1231,8 @@ kind: Pod
 metadata:
   name: host-network-test
 spec:
+  nodeSelector:
+    kubernetes.io/os: linux
   hostNetwork: true
   containers:
   - name: test
@@ -1237,6 +1250,8 @@ kind: Pod
 metadata:
   name: cap-add-test
 spec:
+  nodeSelector:
+    kubernetes.io/os: linux
   containers:
   - name: test
     image: $privilege_test_image
@@ -1258,6 +1273,8 @@ kind: Pod
 metadata:
   name: root-user-test
 spec:
+  nodeSelector:
+    kubernetes.io/os: linux
   containers:
   - name: test
     image: $privilege_test_image
@@ -1277,6 +1294,8 @@ kind: Pod
 metadata:
   name: privileged-test
 spec:
+  nodeSelector:
+    kubernetes.io/os: linux
   containers:
   - name: test
     image: $privilege_test_image
@@ -1295,6 +1314,8 @@ kind: Pod
 metadata:
   name: host-ipc-test
 spec:
+  nodeSelector:
+    kubernetes.io/os: linux
   hostIPC: true
   containers:
   - name: test
@@ -1312,6 +1333,8 @@ kind: Pod
 metadata:
   name: host-pid-test
 spec:
+  nodeSelector:
+    kubernetes.io/os: linux
   hostPID: true
   containers:
   - name: test
@@ -1329,6 +1352,8 @@ kind: Pod
 metadata:
   name: host-userns-test
 spec:
+  nodeSelector:
+    kubernetes.io/os: linux
   hostUsers: true
   containers:
   - name: test
@@ -1339,24 +1364,17 @@ EOF
             echo "Verify: cat /proc/self/uid_map"
 
             echo
-            print_colored_message yellow "8. Use the host UTS namespace - blocked by hostNetwork or sharing UTS namespace"
-            kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: host-uts-test
-spec:
-  hostNetwork: true
-  containers:
-  - name: test
-    image: $privilege_test_image
-    imagePullPolicy: Always
-    command: ["sleep","3600"]
-EOF
-            echo "Verify: hostname"
+            print_colored_message yellow "8. Use the host UTS namespace - separate runtime test required"
+            echo "Kubernetes has no hostUTS pod field; hostNetwork does not request the host UTS namespace."
+            echo "Use --uts=host on an Aqua-monitored Linux Docker host with a policy scoped to that Docker container."
+            echo "This script does not run the Docker UTS test automatically."
+            echo
+            print_colored_message yellow "Windows Only: Port binding lower than 1024"
+            echo "Requires a monitored Windows container host and a compatible Windows image actually binding a port such as 80."
+            echo "Declaring containerPort alone does not bind a port. This Linux workflow skips the Windows test."
 
             echo
-            print_colored_message yellow "[!] Observe that the pod deployments are blocked because they request disallowed container privileges."
+            print_colored_message yellow "[!] Check pod status and Aqua audit evidence for the selected restriction. Kubernetes admission, scheduling, and image errors alone do not prove Aqua enforcement."
             echo
             print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
             ;;
