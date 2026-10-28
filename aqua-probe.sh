@@ -2760,11 +2760,12 @@ terminate_program() {
 # Main
 # 
 test_brute_force_login_detection() {
-    local host login_user port attempts proceed attempt status
+    local host login_user port attempts proceed attempt status key_file
+    local -a auth_options
 
     print_colored_message yellow "Brute Force Login Detection - Host Runtime Policy"
     echo "Apply a Host Runtime Policy with Brute Force Login Detection enabled to the target Linux host."
-    echo "Ensure the host is monitored by an Aqua Enforcer and its SSH service accepts password authentication."
+    echo "Ensure the host is monitored by an Aqua Enforcer and its SSH service accepts your selected authentication method."
     echo "Use a dedicated test account and check its lockout settings before testing."
     echo "Enter an intentionally incorrect password at each SSH password prompt; no passwords are stored by this script."
     echo "Choose an attempt count that meets your configured detection threshold/window (maximum 10 per run)."
@@ -2783,6 +2784,20 @@ test_brute_force_login_detection() {
     if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
         echo "Invalid SSH port."; return 1
     fi
+    read -r -p "SSH private key file path (e.g. ~/.ssh/test.pem; Enter for password authentication): " key_file || return
+    if [[ -n "$key_file" ]]; then
+        case "$key_file" in
+            '~/'*) key_file="$HOME/${key_file#\~/}" ;;
+        esac
+        if [[ ! -f "$key_file" || ! -r "$key_file" ]]; then
+            echo "SSH key file must be an existing, readable file."; return 1
+        fi
+        auth_options=(-i "$key_file" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o PubkeyAuthentication=yes)
+        echo "Using key authentication. SSH will prompt for the key passphrase if required."
+        echo "A valid authorized key succeeds and stops this test; successful logins do not simulate brute-force failures."
+    else
+        auth_options=(-o PreferredAuthentications=password -o PubkeyAuthentication=no)
+    fi
     read -r -p "Number of login attempts [5, maximum 10]: " attempts || return
     attempts=${attempts:-5}
     if [[ ! "$attempts" =~ ^([1-9]|10)$ ]]; then
@@ -2792,9 +2807,10 @@ test_brute_force_login_detection() {
     [[ "$proceed" =~ ^[Yy]$ ]] || return 0
 
     for ((attempt=1; attempt<=attempts; attempt++)); do
-        echo "Login attempt $attempt/$attempts: enter an incorrect password."
+        echo "Login attempt $attempt/$attempts."
+        [[ -n "$key_file" ]] || echo "Enter an intentionally incorrect password."
         if ssh -p "$port" -l "$login_user" \
-            -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+            "${auth_options[@]}" \
             -o NumberOfPasswordPrompts=1 -o ConnectTimeout=5 -o ConnectionAttempts=1 \
             -o ControlMaster=no -o ControlPath=none "$host" true; then
             echo "Authentication succeeded unexpectedly; stopping the test."
