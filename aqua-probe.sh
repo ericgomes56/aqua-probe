@@ -337,6 +337,7 @@ cleanup_aqua_probe_artifacts() {
 
     echo
     print_colored_message yellow "Cleaning up Aqua Probe Kubernetes test artifacts..."
+    kubectl delete pod -l aqua-probe-control=dedicated -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
 
     kubectl delete deployment "${test_deployments[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
     kubectl delete pod "${standalone_test_pods[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --force --ignore-not-found
@@ -2759,6 +2760,54 @@ terminate_program() {
 #
 # Main
 # 
+# Dedicated container controls use owned pods so repeat runs and termination can clean up.
+confirm_container_control() {
+    local control="$1" instructions="$2" proceed
+    echo "$control - Container Runtime Policy"
+    echo "Scope the policy to namespace $AQUA_PROBE_TEST_NAMESPACE and this test image."
+    echo "$instructions"
+    read -r -p "Prerequisites configured; proceed? (y/n): " proceed || return 1
+    [[ "$proceed" =~ ^[Yy]$ ]]
+}
+
+review_container_control() {
+    echo "Review Security Reports -> Audit in Aqua for the control name, policy and test pod."
+    echo "A Kubernetes rejection, image pull failure or command error alone does not prove Aqua blocked the action."
+}
+
+create_control_pod() {
+    local pod="$1" image="$2" overrides="${3:-}" owner
+    [[ -n "$overrides" ]] || overrides='{}'
+    ensure_test_namespace || return 1
+    owner=$(kubectl get pod "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found -o 'jsonpath={.metadata.labels.aqua-probe-control}') || return 1
+    if [[ -n "$owner" ]]; then
+        [[ "$owner" == dedicated ]] || { echo "Refusing to replace a pod not owned by this test."; return 1; }
+        kubectl delete pod "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" --wait=true || return 1
+    elif kubectl get pod "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" >/dev/null 2>&1; then
+        echo "A pod with this name already exists without the test ownership label."; return 1
+    fi
+    kubectl run "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" --image="$image" \
+        --image-pull-policy=Always --restart=Never --labels=aqua-probe-control=dedicated \
+        --override-type=strategic --overrides="$overrides" --command -- sleep 3600 || return 1
+    if ! kubectl wait pod/"$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" --for=condition=Ready --timeout=60s; then
+        kubectl describe pod "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE"
+        return 1
+    fi
+}
+
+test_block_outdated_images() {
+    local image
+    confirm_container_control "Block Outdated Images" "Enable Block Outdated Images in Enforce mode. Choose an image confirmed as outdated by your Aqua policy's configured criteria. An old tag alone is not evidence. Keep unrelated image controls from masking the result." || return
+    image=$(prompt_for_test_image "Image classified as outdated by the configured policy") || return
+    echo "The default image is only a candidate; verify that it meets the outdated-image criteria."
+    if create_control_pod aqua-outdated-image-test "$image"; then
+        echo "Pod became ready. Verify the policy matches and whether Aqua considered this image outdated."
+    else
+        echo "Pod did not become ready; inspect the Kubernetes output and Aqua audit evidence."
+    fi
+    review_container_control
+}
+
 test_brute_force_login_detection() {
     local host login_user port attempts proceed attempt status key_file
     local -a auth_options
@@ -2893,11 +2942,12 @@ main() {
         echo "22. Test Secure AI - Unauthorized Models"
         echo "23. Test System Integrity Monitoring"
         echo "24. Test Volumes Blocked"
-        echo "25. Test Brute Force Login Detection [Host Runtime Policy]"
-        echo "26. Terminate Program"
+        echo "25. Test Block Outdated Images"
+        echo "26. Test Brute Force Login Detection [Host Runtime Policy]"
+        echo "27. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-26): " choice
+        read -p "Enter your choice (1-27): " choice
 
         case $choice in
             1)
@@ -2973,9 +3023,12 @@ main() {
                 test_volumes_blocked
                 ;;
             25)
-                test_brute_force_login_detection
+                test_block_outdated_images
                 ;;
             26)
+                test_brute_force_login_detection
+                ;;
+            27)
                 terminate_program
                 ;;
         esac
