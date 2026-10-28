@@ -2874,6 +2874,19 @@ test_limit_new_privileges() {
     review_container_control
 }
 
+test_registries_allowed() {
+    local image
+    confirm_container_control "Registries Allowed" "Configure the allowed registry list in your Container Runtime Policy and enable enforcement. Select a real, accessible image from a registry excluded from that list. Ensure pull credentials are configured if needed and other image controls do not mask this test." || return
+    image=$(prompt_for_test_image "Image from a registry outside the allowed list") || return
+    echo "The default uses Docker Hub; it triggers this test only if Docker Hub is excluded."
+    if create_control_pod aqua-registries-allowed-test "$image"; then
+        echo "Pod became ready; review the registry allowlist and effective policy."
+    else
+        echo "Pod did not become ready. Distinguish an Aqua registry denial from missing credentials or ImagePullBackOff."
+    fi
+    review_container_control
+}
+
 test_brute_force_login_detection() {
     local host login_user port attempts proceed attempt status key_file
     local -a auth_options
@@ -3013,11 +3026,12 @@ main() {
         echo "27. Test Executables Allowed"
         echo "28. Test Forensics"
         echo "29. Test Limit New Privileges"
-        echo "30. Test Brute Force Login Detection [Host Runtime Policy]"
-        echo "31. Terminate Program"
+        echo "30. Test Registries Allowed"
+        echo "31. Test Brute Force Login Detection [Host Runtime Policy]"
+        echo "32. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-31): " choice
+        read -p "Enter your choice (1-32): " choice
 
         case $choice in
             1)
@@ -3108,9 +3122,12 @@ main() {
                 test_limit_new_privileges
                 ;;
             30)
-                test_brute_force_login_detection
+                test_registries_allowed
                 ;;
             31)
+                test_brute_force_login_detection
+                ;;
+            32)
                 terminate_program
                 ;;
         esac
