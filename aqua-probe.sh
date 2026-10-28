@@ -2844,6 +2844,19 @@ test_executables_allowed() {
     review_container_control
 }
 
+test_forensics() {
+    local image
+    confirm_container_control "Forensics" "Enable Forensics process activity and command-argument collection in the Container Runtime Policy and the applicable Enforcer configuration. Allow container exec and the test commands. This is a collection test; successful commands are expected." || return
+    image=$(prompt_for_test_image "Image with echo, id and ls") || return
+    if create_control_pod aqua-forensics-test "$image"; then
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-forensics-test -- echo aqua-probe-forensics-marker || return 1
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-forensics-test -- id || return 1
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-forensics-test -- ls /tmp || return 1
+        echo "Review this pod's forensic activity in Aqua for echo, id, ls and the aqua-probe-forensics-marker argument."
+        echo "Command success verifies execution only; confirm collection in Aqua. A security incident is not required."
+    fi
+}
+
 test_brute_force_login_detection() {
     local host login_user port attempts proceed attempt status key_file
     local -a auth_options
@@ -2981,11 +2994,12 @@ main() {
         echo "25. Test Block Outdated Images"
         echo "26. Test Capabilities Block"
         echo "27. Test Executables Allowed"
-        echo "28. Test Brute Force Login Detection [Host Runtime Policy]"
-        echo "29. Terminate Program"
+        echo "28. Test Forensics"
+        echo "29. Test Brute Force Login Detection [Host Runtime Policy]"
+        echo "30. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-29): " choice
+        read -p "Enter your choice (1-30): " choice
 
         case $choice in
             1)
@@ -3070,9 +3084,12 @@ main() {
                 test_executables_allowed
                 ;;
             28)
-                test_brute_force_login_detection
+                test_forensics
                 ;;
             29)
+                test_brute_force_login_detection
+                ;;
+            30)
                 terminate_program
                 ;;
         esac
