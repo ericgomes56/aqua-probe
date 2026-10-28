@@ -2857,6 +2857,23 @@ test_forensics() {
     fi
 }
 
+test_limit_new_privileges() {
+    local image overrides output
+    confirm_container_control "Limit New Privileges" "Enable Limit New Privileges in Enforce mode and allow container exec. The test requests allowPrivilegeEscalation: true, drops capabilities, and reads NoNewPrivs from PID 1. With enforced no-new-privileges, expect NoNewPrivs: 1. It does not attempt a host privilege escalation." || return
+    image=$(prompt_for_test_image "Image with sleep and cat") || return
+    overrides='{"spec":{"containers":[{"name":"aqua-new-privileges-test","securityContext":{"allowPrivilegeEscalation":true,"capabilities":{"drop":["ALL"]}}}]}}'
+    if create_control_pod aqua-new-privileges-test "$image" "$overrides"; then
+        output=$(kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-new-privileges-test -- cat /proc/1/status) || return 1
+        printf '%s\n' "$output" | awk '/^NoNewPrivs:/ {print}'
+        if printf '%s\n' "$output" | awk '/^NoNewPrivs:/ && $2 == 1 {found=1} END {exit !found}'; then
+            echo "PID 1 has no-new-privileges set. Check effective policy and admission mutations to establish which control set it."
+        else
+            echo "NoNewPrivs was not confirmed as 1; review policy scope and runtime support."
+        fi
+    fi
+    review_container_control
+}
+
 test_brute_force_login_detection() {
     local host login_user port attempts proceed attempt status key_file
     local -a auth_options
@@ -2995,11 +3012,12 @@ main() {
         echo "26. Test Capabilities Block"
         echo "27. Test Executables Allowed"
         echo "28. Test Forensics"
-        echo "29. Test Brute Force Login Detection [Host Runtime Policy]"
-        echo "30. Terminate Program"
+        echo "29. Test Limit New Privileges"
+        echo "30. Test Brute Force Login Detection [Host Runtime Policy]"
+        echo "31. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-30): " choice
+        read -p "Enter your choice (1-31): " choice
 
         case $choice in
             1)
@@ -3087,9 +3105,12 @@ main() {
                 test_forensics
                 ;;
             29)
-                test_brute_force_login_detection
+                test_limit_new_privileges
                 ;;
             30)
+                test_brute_force_login_detection
+                ;;
+            31)
                 terminate_program
                 ;;
         esac

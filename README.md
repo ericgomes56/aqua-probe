@@ -37,7 +37,8 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 26. Test Capabilities Block
 27. Test Executables Allowed
 28. Test Forensics
-29. Test Brute Force Login Detection [Host Runtime Policy]
+29. Test Limit New Privileges
+30. Test Brute Force Login Detection [Host Runtime Policy]
 
 ## Dedicated Container Controls
 
@@ -59,9 +60,13 @@ Allow sleep and date, exclude uname, and enable Executables Allowed in Enforce m
 
 Enable process and command-argument collection for the test pod. Separate echo, id and ls executions generate harmless forensic activity with the aqua-probe-forensics-marker argument. Verify collected activity in Aqua; this test does not require a block or security incident.
 
+### Limit New Privileges
+
+Enable Limit New Privileges and inspect PID 1's NoNewPrivs flag in a pod requesting allowPrivilegeEscalation: true. Expect 1 with no-new-privileges enforced. Check admission mutations and effective policy before attributing the setting to Aqua; the flag itself need not produce an incident.
+
 ## Host Runtime Policies
 
-Brute Force Login Detection uses a **Host Runtime Policy**, with an Aqua Enforcer monitoring the target Linux host. Run it from menu option 29, or run it directly without Kubernetes startup checks:
+Brute Force Login Detection uses a **Host Runtime Policy**, with an Aqua Enforcer monitoring the target Linux host. Run it from menu option 30, or run it directly without Kubernetes startup checks:
 
 ```bash
 ./aqua-probe.sh --host-runtime
@@ -71,7 +76,7 @@ Enable Brute Force Login Detection in the Host Runtime Policy applied to the tar
 
 The optional **SSH private key file path** prompt accepts a local key such as `~/.ssh/test.pem` (paths with spaces are supported; enter the path without surrounding quotes). Press Enter to retain password authentication. With a key, SSH uses public-key authentication and prompts for its passphrase if needed; Aqua Probe does not copy the key or store its passphrase. A valid authorized key succeeds and stops the test, so it does not generate brute-force failures. A key-based failure test requires rejected authentication attempts observed by the host and supported by the configured detection policy. A missing, unreadable, or invalid key does not prove detection.
 
-Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created; authentication and audit records remain for review. Menu option 30 terminates the program and runs the existing cleanup.
+Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created; authentication and audit records remain for review. Menu option 31 terminates the program and runs the existing cleanup.
 
 Host Runtime controls include the following catalog supplied for this project. Brute Force Login Detection is the host test implemented here; the other entries are not additional host test functions. Shared signatures do not make the existing container tests Host Runtime Policy tests. Availability depends on the target OS and tenant configuration, particularly for Windows registry controls.
 
