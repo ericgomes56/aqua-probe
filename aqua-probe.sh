@@ -2808,6 +2808,21 @@ test_block_outdated_images() {
     review_container_control
 }
 
+test_capabilities_block() {
+    local image overrides
+    confirm_container_control "Capabilities Block" "Enable Capabilities Block in Enforce mode and block CHOWN. Allow container exec for this test. The pod requests CHOWN as its only capability; its root process attempts to change a disposable file's owner." || return
+    image=$(prompt_for_test_image "Image with sh, touch and chown") || return
+    overrides='{"spec":{"containers":[{"name":"aqua-capabilities-block-test","securityContext":{"runAsUser":0,"capabilities":{"drop":["ALL"],"add":["CHOWN"]}}}]}}'
+    if create_control_pod aqua-capabilities-block-test "$image" "$overrides"; then
+        if kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- sh -c 'touch /tmp/aqua-chown-test && chown 12345 /tmp/aqua-chown-test'; then
+            echo "Ownership change succeeded; verify the blocked capability and policy scope."
+        else
+            echo "Ownership change failed; correlate with Aqua before attributing it to Capabilities Block."
+        fi
+    fi
+    review_container_control
+}
+
 test_brute_force_login_detection() {
     local host login_user port attempts proceed attempt status key_file
     local -a auth_options
@@ -2943,11 +2958,12 @@ main() {
         echo "23. Test System Integrity Monitoring"
         echo "24. Test Volumes Blocked"
         echo "25. Test Block Outdated Images"
-        echo "26. Test Brute Force Login Detection [Host Runtime Policy]"
-        echo "27. Terminate Program"
+        echo "26. Test Capabilities Block"
+        echo "27. Test Brute Force Login Detection [Host Runtime Policy]"
+        echo "28. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-27): " choice
+        read -p "Enter your choice (1-28): " choice
 
         case $choice in
             1)
@@ -3026,9 +3042,12 @@ main() {
                 test_block_outdated_images
                 ;;
             26)
-                test_brute_force_login_detection
+                test_capabilities_block
                 ;;
             27)
+                test_brute_force_login_detection
+                ;;
+            28)
                 terminate_program
                 ;;
         esac
