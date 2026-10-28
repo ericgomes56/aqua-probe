@@ -134,24 +134,63 @@ handle_flags() {
 print_colored_message() {
     local color="$1"
     local message="$2"
-
+    local code
     case "$color" in
-        red)
-            echo -e "\033[0;31m$message\033[0m"
-            ;;
-        blue)
-            echo -e "\033[0;34m$message\033[0m"
-            ;;
-        green)
-            echo -e "\033[0;32m$message\033[0m"
-            ;;
-        yellow)
-            echo -e "\033[0;33m$message\033[0m"
-            ;;
-        *)
-            echo "Invalid color. Please choose from: red, blue, green, yellow."
-            ;;
+        red) code=31 ;; blue) code=34 ;; green) code=32 ;;
+        yellow) code=33 ;; cyan) code=36 ;; *) code=0 ;;
     esac
+    if [[ -t 1 && -z "${NO_COLOR+x}" && "${TERM:-}" != dumb ]]; then
+        printf '\033[0;%sm%s\033[0m\n' "$code" "$message"
+    else
+        printf '%s\n' "$message"
+    fi
+}
+
+instruction_width() {
+    local width="${COLUMNS:-80}"
+    [[ "$width" =~ ^[1-9][0-9]{1,2}$ ]] || width=80
+    (( width < 30 )) && width=30
+    (( width > 100 )) && width=100
+    printf '%s' "$width"
+}
+
+print_test_header() {
+    local title="$1" scope="${2:-Container Runtime Policy}" width rule
+    width=$(instruction_width)
+    printf -v rule '%*s' "$width" ''
+    rule=${rule// /-}
+    echo
+    print_colored_message cyan "$rule"
+    printf 'AQUA PROBE | %s\n' "$title" | fold -s -w "$width"
+    print_colored_message cyan "$scope"
+    print_colored_message cyan "$rule"
+}
+
+print_instructions() {
+    local line width
+    width=$(instruction_width)
+    print_colored_message yellow "BEFORE YOU BEGIN"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        [[ -n "$line" ]] || continue
+        printf '%s\n' "$line" | fold -s -w "$((width - 2))" | sed 's/^/  /'
+    done <<< "$1"
+    echo
+}
+
+format_prompt() {
+    if [[ -t 2 && -z "${NO_COLOR+x}" && "${TERM:-}" != dumb ]]; then
+        printf '\033[0;36m> %s\033[0m' "$1"
+    else
+        printf '> %s' "$1"
+    fi
+}
+
+print_audit_review() {
+    echo
+    print_colored_message green "REVIEW IN AQUA"
+    printf '  Security Reports -> Audit\n'
+    printf '  Review the event, effective policy, and affected workload.\n'
 }
 
 check_kubernetes_connection() {
@@ -241,7 +280,7 @@ prompt_for_test_image() {
     local default_image="${AQUA_PROBE_IMAGE:-ericgomes56/aqua-probe:2.0}"
     local selected_image
 
-    printf "%s [default: %s]: " "$prompt_message" "$default_image" >&2
+    format_prompt "$prompt_message [default: $default_image]: " >&2
     read selected_image
 
     if [ -z "$selected_image" ]; then
@@ -408,6 +447,7 @@ cleanup_non_compliant_resources_lab() {
 
 # Real-time Malware Protection 
 test_realtime_malware_protection() {
+    print_test_header "Real-time Malware Protection"
   # Split and concatenate the EICAR string (done at the start for consistency)
   string1='X5O!P%@AP[4\PZX54(P^)'
   string2='7CC)7}$EICAR-STANDARD'
@@ -419,14 +459,14 @@ test_realtime_malware_protection() {
   else
     # Ask user if prerequisites are met
     echo
-    print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+    print_instructions "
     1. Create a Custom Policy with Real-time Malware Protection Control enabled
     2. Ensure that the Real-time Malware Protection Control is set to 'Delete' action
     3. Ensure that the Custom Policy is set to 'Enforce' mode
     4. Ensure that Block Container Exec Control is disabled"
 
     echo
-    read -p "Proceed? (y/n): " prerequisites_met
+    read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
   fi
 
   case $prerequisites_met in
@@ -461,7 +501,7 @@ test_realtime_malware_protection() {
         echo
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ls -la /tmp/
         echo
-        print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+        print_audit_review
 
       else  
         print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
@@ -480,17 +520,18 @@ test_realtime_malware_protection() {
 
 # Drift Prevention
 test_drift_prevention() {
+    print_test_header "Drift Prevention"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Drift Prevention Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -512,7 +553,7 @@ test_drift_prevention() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -529,17 +570,18 @@ test_drift_prevention() {
 
 # Block Cryptomining
 test_block_cryptocurrency_mining() {
+    print_test_header "Block Cryptocurrency Mining"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Block Cryptocurrency Mining Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -555,7 +597,7 @@ test_block_cryptocurrency_mining() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -572,17 +614,18 @@ test_block_cryptocurrency_mining() {
 
 # Block Fileless Exec
 test_block_fileless_execution() {
+    print_test_header "Block Fileless Execution"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Block Fileless Execution Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -597,7 +640,7 @@ test_block_fileless_execution() {
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ./tmp/memrun MASTER_HACKER_PROCESS_NAME_1337 /tmp/target
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -614,17 +657,18 @@ test_block_fileless_execution() {
 
 # Block Reverse Shell
 test_reverse_shell() {
+    print_test_header "Block Reverse Shell"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Reverse Shell Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -690,18 +734,19 @@ EOF
 
 # Executables Blocked
 test_executables_blocked() {
+    print_test_header "Executables Blocked"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Executables Block Control enabled
         2. Add 'ps' to the list of blocked executables 
         3. Ensure that the Custom Policy is set to 'Enforce' mode
         4. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -719,7 +764,7 @@ test_executables_blocked() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -736,16 +781,17 @@ test_executables_blocked() {
 
 # Block Container Exec
 test_block_container_exec() {
+    print_test_header "Block Container Exec"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Block Container Exec Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -760,7 +806,7 @@ test_block_container_exec() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -777,17 +823,18 @@ test_block_container_exec() {
 
 # Bad DNS/IP Reputation
 test_bad_dns_ip_reputation() {
+    print_test_header "Bad DNS/IP Reputation"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Bad DNS/IP Reputation Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -803,7 +850,7 @@ test_bad_dns_ip_reputation() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -820,18 +867,19 @@ test_bad_dns_ip_reputation() {
 
 # File Block
 test_file_block() {
+    print_test_header "File Block"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with File Block Control enabled
         2. Add '/etc/passwd' to the list of blocked files
         3. Ensure that the Custom Policy is set to 'Enforce' mode
         4. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -847,7 +895,7 @@ test_file_block() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -864,18 +912,19 @@ test_file_block() {
 
 # Package Block
 test_package_block() {
+    print_test_header "Package Block"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Package Block Control enabled
         2. Add 'tar' to the list of blocked packages
         3. Ensure that the Custom Policy is set to 'Enforce' mode
         4. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -891,7 +940,7 @@ test_package_block() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -908,17 +957,18 @@ test_package_block() {
 
 # Port Scanning Detection
 test_port_scanning_detection() {
+    print_test_header "Port Scanning Detection"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Port Scanning Detection Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -935,7 +985,7 @@ test_port_scanning_detection() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -952,17 +1002,18 @@ test_port_scanning_detection() {
 
 # Block Non-compliant Images
 test_block_non_compliant_images() {
+    print_test_header "Block Non-compliant Images"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Update the Assurance Policy to check for Malware
         2. Ensure that the Assurance Policy blocks non-compliant images
         3. Ensure that the Assurance Policy is applied to this Kubernetes environment"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -1013,18 +1064,19 @@ EOF
 
 # Block Unregistered Images
 test_block_unregistered_images() {
+    print_test_header "Block Unregistered Images"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Update the Assurance Policy to block unregistered images
         2. Ensure that the Assurance Policy is applied to this Kubernetes environment
         3. Ensure that 'Automatically registering running containers' is disabled in Global Settings
         4. If using Kube-Enforcer, ensure that 'Registering discovered pod images' is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -1078,18 +1130,19 @@ EOF
 
 # File Integrity Monitoring
 test_file_integrity_monitoring() {
+    print_test_header "File Integrity Monitoring"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with File Integrity Monitoring Control enabled
         2. Add '/etc/sudoers' and '/etc/backdoor.conf' to the monitored files
         3. Ensure that the Custom Policy is set to 'Enforce' mode
         4. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -1131,7 +1184,7 @@ EOF
                 echo
                 print_colored_message yellow "[!] Observe that file create, modify, permission change, or delete activity was detected by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -1148,17 +1201,18 @@ EOF
 
 # System Integrity Monitoring
 test_system_integrity_monitoring() {
+    print_test_header "System Integrity Monitoring"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with System Integrity Monitoring Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Ensure that Block Container Exec Control is disabled"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -1174,7 +1228,7 @@ test_system_integrity_monitoring() {
                 echo
                 print_colored_message yellow "[!] Observe that system time change activity was detected by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -1191,12 +1245,13 @@ test_system_integrity_monitoring() {
 
 # Limit Container Privileges
 test_limit_container_privileges() {
+    print_test_header "Limit Container Privileges"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Container Runtime Policy with Limit Container Privileges enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. Linux Only options:
@@ -1212,7 +1267,7 @@ test_limit_container_privileges() {
         5. This workflow deploys seven Linux Kubernetes test pods. Host UTS requires a separate runtime test.
         6. Scope the policy to aqua-probe-lab. Select one restriction at a time to isolate results; a root image or host namespace may match multiple restrictions."
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -1376,7 +1431,7 @@ EOF
             echo
             print_colored_message yellow "[!] Check pod status and Aqua audit evidence for the selected restriction. Kubernetes admission, scheduling, and image errors alone do not prove Aqua enforcement."
             echo
-            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            print_audit_review
             ;;
         [Nn]*)
             echo "Please ensure the prerequisites are met before proceeding."
@@ -1390,12 +1445,13 @@ EOF
 
 # Block Non-Kubernetes Containers
 test_block_non_kubernetes_containers() {
+    print_test_header "Block Non-Kubernetes Containers"
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
         prerequisites_met="Y" # Set prerequisites_met to 'Y' immediately
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Block Non-Kubernetes Containers Control enabled
         2. Ensure that the Custom Policy is set to 'Enforce' mode
         3. SSH to the Kubernetes worker node where the Aqua Enforcer is running
@@ -1403,7 +1459,7 @@ test_block_non_kubernetes_containers() {
         echo
         print_colored_message yellow "[!] Disclaimer: This test only works when executed on a Kubernetes worker node with direct access to the container runtime. It is intended to deploy a Docker-only container outside the Kubernetes API."
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -1418,7 +1474,7 @@ test_block_non_kubernetes_containers() {
             echo
             print_colored_message yellow "[!] Observe that the Docker-only container is blocked because it was started outside Kubernetes."
             echo
-            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            print_audit_review
             ;;
         [Nn]*)
             echo "Please ensure the prerequisites are met before proceeding."
@@ -1432,6 +1488,7 @@ test_block_non_kubernetes_containers() {
 
 # Port Block
 test_port_block() {
+    print_test_header "Port Block"
     local default_host="10.0.0.1"
     local default_port="22"
 
@@ -1440,7 +1497,7 @@ test_port_block() {
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Port Block Control enabled
         2. Add the destination port you will test to the blocked ports list
         3. Ensure that the Custom Policy is set to 'Enforce' mode
@@ -1448,7 +1505,7 @@ test_port_block() {
         echo
         print_colored_message yellow "[!] This test opens a TCP connection from the Aqua test container to a target host and port. Use a reachable target and make sure the same port is configured in the Port Block control."
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -1458,11 +1515,11 @@ test_port_block() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                read -p "Enter target host or IP [default: $default_host]: " port_block_host
+                read -p "$(format_prompt "Enter target host or IP [default: $default_host]: ")" port_block_host
                 if [ -z "$port_block_host" ]; then
                     port_block_host="$default_host"
                 fi
-                read -p "Enter target port configured in the Port Block policy [default: $default_port]: " port_block_port
+                read -p "$(format_prompt "Enter target port configured in the Port Block policy [default: $default_port]: ")" port_block_port
                 if [ -z "$port_block_port" ]; then
                     port_block_port="$default_port"
                 fi
@@ -1475,7 +1532,7 @@ test_port_block() {
                 echo
                 print_colored_message yellow "[!] Observe that an error code or kill signal was returned because the destination port has been blocked by Aqua."
                 echo
-                print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+                print_audit_review
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
@@ -1492,6 +1549,7 @@ test_port_block() {
 
 # Volumes Blocked
 test_volumes_blocked() {
+    print_test_header "Volumes Blocked"
     local default_host_path="/etc"
     local default_mount_path="/host-etc"
 
@@ -1500,7 +1558,7 @@ test_volumes_blocked() {
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Volumes Blocked Control enabled
         2. Add the host path you will test to the blocked volumes list
         3. Ensure that the Custom Policy is set to 'Enforce' mode
@@ -1508,17 +1566,17 @@ test_volumes_blocked() {
         echo
         print_colored_message yellow "[!] This test deploys a pod with a hostPath volume. Use a host path that is configured in the Volumes Blocked control."
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
         [Yy]*)
             echo
-            read -p "Enter blocked host path to mount [default: $default_host_path]: " blocked_host_path
+            read -p "$(format_prompt "Enter blocked host path to mount [default: $default_host_path]: ")" blocked_host_path
             if [ -z "$blocked_host_path" ]; then
                 blocked_host_path="$default_host_path"
             fi
-            read -p "Enter container mount path [default: $default_mount_path]: " blocked_mount_path
+            read -p "$(format_prompt "Enter container mount path [default: $default_mount_path]: ")" blocked_mount_path
             if [ -z "$blocked_mount_path" ]; then
                 blocked_mount_path="$default_mount_path"
             fi
@@ -1555,7 +1613,7 @@ EOF
             echo
             print_colored_message yellow "[!] Observe that the pod creation is blocked because it requests a blocked hostPath volume."
             echo
-            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            print_audit_review
             ;;
         [Nn]*)
             echo "Please ensure the prerequisites are met before proceeding."
@@ -1569,6 +1627,7 @@ EOF
 
 # Block Non-compliant Resources
 test_block_non_compliant_resources() {
+    print_test_header "Block Non-compliant Resources"
     local lab_namespace="$AQUA_PROBE_TEST_NAMESPACE"
 
     if [ "$AQUA_PROBE_SKIP_INSTRUCTIONS" ]; then
@@ -1576,7 +1635,7 @@ test_block_non_compliant_resources() {
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create a Custom Policy with Block Non-compliant Resources enabled
         2. Enable the Kubernetes resource checks you want to validate
         3. Ensure that the Custom Policy is set to 'Enforce' mode
@@ -1584,7 +1643,7 @@ test_block_non_compliant_resources() {
         echo
         print_colored_message yellow "[!] This test applies intentionally non-compliant Kubernetes resources in namespace '$lab_namespace'. Use only in a disposable lab cluster."
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
@@ -2261,7 +2320,7 @@ EOF
             echo
             print_colored_message yellow "[!] Observe that non-compliant resource creation is blocked or reported by Aqua."
             echo
-            print_colored_message green "[✓] Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+            print_audit_review
             echo
             print_colored_message yellow "Cleanup runs automatically when you select the Terminate Program option."
             ;;
@@ -2277,6 +2336,7 @@ EOF
 
 # Secure AI - Discovery
 test_secure_ai_discovery() {
+    print_test_header "Secure AI - Discovery"
     local ai_app_name="mars-banking-app"
     local ai_service_name="mars-banking-app-lb"
     local openai_secret_name="openai-api-key"
@@ -2286,19 +2346,19 @@ test_secure_ai_discovery() {
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create or update the Aqua policy required for Secure AI Discovery
         2. Ensure that Secure AI discovery controls are enabled for this Kubernetes environment
         3. Ensure that the policy is applied to namespace '$AQUA_PROBE_TEST_NAMESPACE'
         4. Have an OpenAI API key ready. It will be collected as sensitive input and stored as a Kubernetes secret named '$openai_secret_name'"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
         [Yy]*)
             echo
-            read -s -p "Enter OpenAI API key for the AI discovery app: " openai_api_key
+            read -s -p "$(format_prompt "Enter OpenAI API key for the AI discovery app: ")" openai_api_key
             echo
 
             if [ -z "$openai_api_key" ]; then
@@ -2418,6 +2478,7 @@ EOF
 
 # Secure AI - Unauthorized Models
 test_secure_ai_unauthorized_models() {
+    print_test_header "Secure AI - Unauthorized Models"
     local ai_app_name="mars-banking-app"
     local ai_service_name="mars-banking-app-lb"
     local openai_secret_name="openai-api-key"
@@ -2428,7 +2489,7 @@ test_secure_ai_unauthorized_models() {
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. Create or update the Aqua policy required for Secure AI Unauthorized Models
         2. In the policy, select OpenAI for the Service dropdown
         3. In the policy, set Model Name to 'gpt-4'
@@ -2436,13 +2497,13 @@ test_secure_ai_unauthorized_models() {
         5. Ensure that the policy is applied to namespace '$AQUA_PROBE_TEST_NAMESPACE'
         6. Have an OpenAI API key ready. It will be collected as sensitive input and stored as a Kubernetes secret named '$openai_secret_name'"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
         [Yy]*)
             echo
-            read -s -p "Enter OpenAI API key for the AI unauthorized models test: " openai_api_key
+            read -s -p "$(format_prompt "Enter OpenAI API key for the AI unauthorized models test: ")" openai_api_key
             echo
 
             if [ -z "$openai_api_key" ]; then
@@ -2587,6 +2648,7 @@ EOF
 
 # Secure AI - Protection
 test_secure_ai_protection() {
+    print_test_header "Secure AI - Protection"
     local ai_app_name="mars-banking-app"
     local ai_service_name="mars-banking-app-lb"
     local openai_secret_name="openai-api-key"
@@ -2597,20 +2659,20 @@ test_secure_ai_protection() {
     else
         # Ask user if prerequisites are met
         echo
-        print_colored_message yellow "[!] In order to test out the use case successfully, please ensure that the following prerequisites are met:
+        print_instructions "
         1. This is an Aqua SaaS tenant feature ONLY and is not supported for on-prem Aqua tenants
         2. Enable Prompt Protection Settings under Administration -> Integrations -> Secure AI
         3. Ensure that Secure AI protection controls are enabled for this Kubernetes environment
         4. Ensure that the policy is applied to namespace '$AQUA_PROBE_TEST_NAMESPACE'
         5. Have an OpenAI API key ready. It will be collected as sensitive input and stored as a Kubernetes secret named '$openai_secret_name'"
         echo
-        read -p "Proceed? (y/n): " prerequisites_met
+        read -p "$(format_prompt "Ready to run this test? (y/n): ")" prerequisites_met
     fi
 
     case $prerequisites_met in
         [Yy]*)
             echo
-            read -s -p "Enter OpenAI API key for the AI protection test: " openai_api_key
+            read -s -p "$(format_prompt "Enter OpenAI API key for the AI protection test: ")" openai_api_key
             echo
 
             if [ -z "$openai_api_key" ]; then
@@ -2755,7 +2817,7 @@ EOF
 
 # Terminate the program
 terminate_program() {
-    read -p "Are you sure you want to terminate the program? (y/n): " terminate_choice
+    read -p "$(format_prompt "Are you sure you want to terminate the program? (y/n): ")" terminate_choice
     case $terminate_choice in
         [Yy]*)
             cleanup_aqua_probe_artifacts
@@ -2781,15 +2843,14 @@ terminate_program() {
 # Dedicated container controls use owned pods so repeat runs and termination can clean up.
 confirm_container_control() {
     local control="$1" instructions="$2" proceed
-    echo "$control - Container Runtime Policy"
-    echo "Scope the policy to namespace $AQUA_PROBE_TEST_NAMESPACE and this test image."
-    echo "$instructions"
-    read -r -p "Prerequisites configured; proceed? (y/n): " proceed || return 1
+    print_instructions "Scope the policy to namespace $AQUA_PROBE_TEST_NAMESPACE and this test image.
+$instructions"
+    read -r -p "$(format_prompt "Ready to run this test? (y/n): ")" proceed || return 1
     [[ "$proceed" =~ ^[Yy]$ ]]
 }
 
 review_container_control() {
-    echo "Review Security Reports -> Audit in Aqua for the control name, policy and test pod."
+    print_audit_review
     echo "A Kubernetes rejection, image pull failure or command error alone does not prove Aqua blocked the action."
 }
 
@@ -2814,6 +2875,7 @@ create_control_pod() {
 }
 
 test_block_outdated_images() {
+    print_test_header "Block Outdated Images"
     local image
     confirm_container_control "Block Outdated Images" "Enable Block Outdated Images in Enforce mode. Choose an image confirmed as outdated by your Aqua policy's configured criteria. An old tag alone is not evidence. Keep unrelated image controls from masking the result." || return
     image=$(prompt_for_test_image "Image classified as outdated by the configured policy") || return
@@ -2827,6 +2889,7 @@ test_block_outdated_images() {
 }
 
 test_capabilities_block() {
+    print_test_header "Capabilities Block"
     local image overrides
     confirm_container_control "Capabilities Block" "Linux only. Enforce only. Requires container restart after policy changes.
 In the Container Runtime Policy, select Enable Capabilities Block control and choose CHOWN under Drop Capabilities, then save the policy.
@@ -2854,6 +2917,7 @@ The pod requests CHOWN as its only capability; Aqua should remove it through the
 }
 
 test_executables_allowed() {
+    print_test_header "Executables Allowed"
     local image
     confirm_container_control "Executables Allowed" "Enable Executables Allowed in Enforce mode. Allow sleep and date (including their resolved image paths) but exclude uname. Allow container exec. Use an image containing all three executables." || return
     image=$(prompt_for_test_image "Image with sleep, date and uname") || return
@@ -2875,6 +2939,7 @@ test_executables_allowed() {
 }
 
 test_forensics() {
+    print_test_header "Forensics"
     local image
     confirm_container_control "Forensics" "Enable Forensics process activity and command-argument collection in the Container Runtime Policy and the applicable Enforcer configuration. Allow container exec and the test commands. This is a collection test; successful commands are expected." || return
     image=$(prompt_for_test_image "Image with echo, id and ls") || return
@@ -2888,6 +2953,7 @@ test_forensics() {
 }
 
 test_limit_new_privileges() {
+    print_test_header "Limit New Privileges"
     local image overrides output
     confirm_container_control "Limit New Privileges" "Enable Limit New Privileges in Enforce mode and allow container exec. The test requests allowPrivilegeEscalation: true, drops capabilities, and reads NoNewPrivs from PID 1. With enforced no-new-privileges, expect NoNewPrivs: 1. It does not attempt a host privilege escalation." || return
     image=$(prompt_for_test_image "Image with sleep and cat") || return
@@ -2905,6 +2971,7 @@ test_limit_new_privileges() {
 }
 
 test_registries_allowed() {
+    print_test_header "Registries Allowed"
     local image
     confirm_container_control "Registries Allowed" "Configure the allowed registry list in your Container Runtime Policy and enable enforcement. Select a real, accessible image from a registry excluded from that list. Ensure pull credentials are configured if needed and other image controls do not mask this test." || return
     image=$(prompt_for_test_image "Image from a registry outside the allowed list") || return
@@ -2918,31 +2985,31 @@ test_registries_allowed() {
 }
 
 test_brute_force_login_detection() {
+    print_test_header "Brute Force Login Detection" "Host Runtime Policy"
     local host login_user port attempts proceed attempt status key_file
     local -a auth_options
 
-    print_colored_message yellow "Brute Force Login Detection - Host Runtime Policy"
-    echo "Apply a Host Runtime Policy with Brute Force Login Detection enabled to the target Linux host."
-    echo "Ensure the host is monitored by an Aqua Enforcer and its SSH service accepts your selected authentication method."
-    echo "Use a dedicated test account and check its lockout settings before testing."
-    echo "Enter an intentionally incorrect password at each SSH password prompt; no passwords are stored by this script."
-    echo "Choose an attempt count that meets your configured detection threshold/window (maximum 10 per run)."
-    echo "This test connects directly to host SSH; it does not deploy or exec into a container."
+    print_instructions "Apply a Host Runtime Policy with Brute Force Login Detection enabled to the target Linux host.
+Ensure the host is monitored by an Aqua Enforcer and its SSH service accepts your selected authentication method.
+Use a dedicated test account and check its lockout settings before testing.
+Enter an intentionally incorrect password at each SSH password prompt; no passwords are stored by this script.
+Choose an attempt count that meets your configured detection threshold/window (maximum 10 per run).
+This test connects directly to host SSH; it does not deploy or exec into a container."
     command -v ssh >/dev/null 2>&1 || { echo "OpenSSH client is required."; return 1; }
-    read -r -p "Monitored host IP or hostname: " host || return
+    read -r -p "$(format_prompt "Monitored host IP or hostname: ")" host || return
     if [[ ! "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]]; then
         echo "Invalid hostname or IP address."; return 1
     fi
-    read -r -p "Dedicated test account username: " login_user || return
+    read -r -p "$(format_prompt "Dedicated test account username: ")" login_user || return
     if [[ ! "$login_user" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
         echo "Invalid username."; return 1
     fi
-    read -r -p "SSH port [22]: " port || return
+    read -r -p "$(format_prompt "SSH port [22]: ")" port || return
     port=${port:-22}
     if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
         echo "Invalid SSH port."; return 1
     fi
-    read -r -p "SSH private key file path (e.g. ~/.ssh/test.pem; Enter for password authentication): " key_file || return
+    read -r -p "$(format_prompt "SSH private key file path (e.g. ~/.ssh/test.pem; Enter for password authentication): ")" key_file || return
     if [[ -n "$key_file" ]]; then
         case "$key_file" in
             '~/'*) key_file="$HOME/${key_file#\~/}" ;;
@@ -2956,12 +3023,12 @@ test_brute_force_login_detection() {
     else
         auth_options=(-o PreferredAuthentications=password -o PubkeyAuthentication=no)
     fi
-    read -r -p "Number of login attempts [5, maximum 10]: " attempts || return
+    read -r -p "$(format_prompt "Number of login attempts [5, maximum 10]: ")" attempts || return
     attempts=${attempts:-5}
     if [[ ! "$attempts" =~ ^([1-9]|10)$ ]]; then
         echo "Enter an attempt count from 1 to 10."; return 1
     fi
-    read -r -p "Proceed with $attempts test logins to $host? (y/n): " proceed || return
+    read -r -p "$(format_prompt "Proceed with $attempts test logins to $host? (y/n): ")" proceed || return
     [[ "$proceed" =~ ^[Yy]$ ]] || return 0
 
     for ((attempt=1; attempt<=attempts; attempt++)); do
@@ -2983,7 +3050,7 @@ test_brute_force_login_detection() {
         echo "SSH did not complete successfully. Verify its output shows an authentication failure, not a connection or host-key error."
     done
     echo "Review the host authentication logs to confirm the failed login attempts."
-    print_colored_message green "Please login to the Aqua Console and click on the Security Reports -> Audit page to review the security incident."
+    print_audit_review
     echo "An Aqua detection depends on the Host Runtime Policy threshold, time window, and host coverage."
     echo "No test resources were created; host authentication and audit records remain for review."
 }
@@ -3008,7 +3075,7 @@ main() {
     # Check if Aqua test container exists
     if check_container_existence; then
         echo "Aqua test container already exists."
-        read -p "Would you like to redeploy the test application? (y/n): " redeploy_choice
+        read -p "$(format_prompt "Would you like to redeploy the test application? (y/n): ")" redeploy_choice
         if [[ "$redeploy_choice" =~ ^[Yy] ]]; then
             delete_test_container
             deploy_test_container
@@ -3061,7 +3128,7 @@ main() {
         echo "32. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-32): " choice
+        read -p "$(format_prompt "Enter your choice (1-32): ")" choice
 
         case $choice in
             1)

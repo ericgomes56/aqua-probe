@@ -141,6 +141,8 @@ Host Runtime controls include the following catalog supplied for this project. B
 - Windows Registry Protection
 
 ## Usage
+Test instructions share cyan headings and prompts, yellow prerequisite labels, green review guidance, and red errors. Long prerequisites wrap to the terminal width. Set `NO_COLOR=1` for plain-text test instructions; redirected status output also omits color codes. The Aqua logo retains its existing branding.
+
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
 2. Run the script by executing `./aqua-probe.sh`.
 3. Follow the on-screen prompts to deploy the test container and perform security tests.
