@@ -2823,6 +2823,27 @@ test_capabilities_block() {
     review_container_control
 }
 
+test_executables_allowed() {
+    local image
+    confirm_container_control "Executables Allowed" "Enable Executables Allowed in Enforce mode. Allow sleep and date (including their resolved image paths) but exclude uname. Allow container exec. Use an image containing all three executables." || return
+    image=$(prompt_for_test_image "Image with sleep, date and uname") || return
+    if create_control_pod aqua-executables-allowed-test "$image"; then
+        echo "Allowed baseline: date"
+        if ! kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-executables-allowed-test -- date; then
+            echo "Allowed baseline failed; correct the image or policy before interpreting the negative test."
+            review_container_control
+            return 1
+        fi
+        echo "Excluded executable: uname -a"
+        if kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-executables-allowed-test -- uname -a; then
+            echo "Excluded executable ran; check the allowlist and effective policy."
+        else
+            echo "Excluded executable failed; confirm an Executables Allowed event in Aqua."
+        fi
+    fi
+    review_container_control
+}
+
 test_brute_force_login_detection() {
     local host login_user port attempts proceed attempt status key_file
     local -a auth_options
@@ -2959,11 +2980,12 @@ main() {
         echo "24. Test Volumes Blocked"
         echo "25. Test Block Outdated Images"
         echo "26. Test Capabilities Block"
-        echo "27. Test Brute Force Login Detection [Host Runtime Policy]"
-        echo "28. Terminate Program"
+        echo "27. Test Executables Allowed"
+        echo "28. Test Brute Force Login Detection [Host Runtime Policy]"
+        echo "29. Terminate Program"
         echo
 
-        read -p "Enter your choice (1-28): " choice
+        read -p "Enter your choice (1-29): " choice
 
         case $choice in
             1)
@@ -3045,9 +3067,12 @@ main() {
                 test_capabilities_block
                 ;;
             27)
-                test_brute_force_login_detection
+                test_executables_allowed
                 ;;
             28)
+                test_brute_force_login_detection
+                ;;
+            29)
                 terminate_program
                 ;;
         esac
