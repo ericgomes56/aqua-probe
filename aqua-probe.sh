@@ -2828,16 +2828,28 @@ test_block_outdated_images() {
 
 test_capabilities_block() {
     local image overrides
-    confirm_container_control "Capabilities Block" "Enable Capabilities Block in Enforce mode and block CHOWN. Allow container exec for this test. The pod requests CHOWN as its only capability; its root process attempts to change a disposable file's owner." || return
-    image=$(prompt_for_test_image "Image with sh, touch and chown") || return
-    overrides='{"spec":{"containers":[{"name":"aqua-capabilities-block-test","securityContext":{"runAsUser":0,"capabilities":{"drop":["ALL"],"add":["CHOWN"]}}}]}}'
+    confirm_container_control "Capabilities Block" "Linux only. Enforce only. Requires container restart after policy changes.
+In the Container Runtime Policy, select Enable Capabilities Block control and choose CHOWN under Drop Capabilities, then save the policy.
+ALL is also available, but CHOWN isolates this example. Other dropdown capabilities require their own validation actions.
+Allow container exec and the test executables. Other controls such as Limit Container Privileges must not prevent this root pod from starting with an added capability.
+After confirmation this test recreates its owned pod so the updated policy applies at container startup.
+The pod requests CHOWN as its only capability; Aqua should remove it through the selected Drop Capabilities setting." || return
+    image=$(prompt_for_test_image "Linux image with sleep, touch, chown and cat") || return
+    overrides='{"spec":{"nodeSelector":{"kubernetes.io/os":"linux"},"containers":[{"name":"aqua-capabilities-block-test","securityContext":{"runAsUser":0,"capabilities":{"drop":["ALL"],"add":["CHOWN"]}}}]}}'
     if create_control_pod aqua-capabilities-block-test "$image" "$overrides"; then
-        if kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- sh -c 'touch /tmp/aqua-chown-test && chown 12345 /tmp/aqua-chown-test'; then
+        echo "Inspect CapEff and CapBnd in PID 1's status; CHOWN is bit 0 and should be absent after dropping it."
+        kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- cat /proc/1/status || return 1
+        if ! kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- touch /tmp/aqua-chown-test; then
+            echo "File setup failed; the CHOWN test was not attempted."
+            return 1
+        fi
+        if kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- chown 12345 /tmp/aqua-chown-test; then
             echo "Ownership change succeeded; verify the blocked capability and policy scope."
         else
-            echo "Ownership change failed; correlate with Aqua before attributing it to Capabilities Block."
+            echo "Ownership change failed; confirm CHOWN was removed and the intended policy applied before attributing the failure to Aqua."
         fi
     fi
+    echo "Capability removal may surface as a kernel permission error; an Aqua incident for each denied operation is not guaranteed."
     review_container_control
 }
 

@@ -71,7 +71,26 @@ Choose an image Aqua classifies as outdated under the configured Container Runti
 
 ### Capabilities Block
 
-Block CHOWN in the Capabilities Block control. The dedicated root pod drops all capabilities and requests only CHOWN, then attempts to change the owner of a disposable file. Kubernetes admission restrictions or ordinary filesystem permissions can also reject this test; correlate with Aqua.
+**Linux only. Enforce only. Requires container restart.** In the Container Runtime Policy, select **Enable Capabilities Block control**, choose `CHOWN` under **Drop Capabilities**, and save the policy before running this test. The test recreates its owned pod so the new setting applies at startup, and schedules it only on Linux nodes.
+
+The root pod drops all capabilities in its Kubernetes spec, then requests only `CHOWN`. Aqua's selected drop setting should remove that capability. The test displays `/proc/1/status` (CHOWN is bit 0 in `CapEff` and `CapBnd`), creates a disposable file, and separately attempts `chown 12345 /tmp/aqua-chown-test`. File setup failure stops the test. Allow container exec and the test commands; ensure other controls do not reject the root user or added capability before this test can run.
+
+The dropdown options shown in the supplied Aqua UI screenshots are:
+
+```text
+ALL
+AUDIT_CONTROL, AUDIT_WRITE, BLOCK_SUSPEND, CHOWN
+DAC_OVERRIDE, DAC_READ_SEARCH, FOWNER, FSETID
+IPC_LOCK, IPC_OWNER, KILL, LEASE, LINUX_IMMUTABLE
+MAC_ADMIN, MAC_OVERRIDE, MKNOD
+NET_ADMIN, NET_BIND_SERVICE, NET_BROADCAST, NET_RAW
+SETGID, SETFCAP, SETPCAP, SETUID
+SYS_ADMIN, SYS_BOOT, SYS_CHROOT, SYS_MODULE, SYS_NICE
+SYS_PACCT, SYS_PTRACE, SYS_RAWIO, SYS_RESOURCE, SYS_TIME
+SYS_TTY_CONFIG, SYSLOG, WAKE_ALARM
+```
+
+`ALL` is also available, but `CHOWN` isolates this example. The other options are documented choices, not additional automated tests. A failed command alone is insufficient: inspect the runtime capability masks and effective Aqua policy. Capability removal can produce a kernel permission error without a separate Aqua incident for every denied operation. Kubernetes admission and filesystem errors must be distinguished from this control.
 
 ### Executables Allowed
 
