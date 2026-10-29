@@ -1,13 +1,63 @@
 #!/bin/bash
 
+# Brand palette from aquasec.com: ink-deep, electric-blue, teal, and text-muted.
+# Keep background/color resets on every row so the shell retains its own theme.
+print_banner_row() {
+    local text="$1" tone="${2:-text}" block_width="${3:-0}"
+    local width padding row code
+    width=$(instruction_width)
+    (( block_width > 0 )) || block_width=${#text}
+    padding=$(( (width - block_width) / 2 ))
+    (( padding >= 0 )) || padding=0
+    printf -v row '%*s%s' "$padding" '' "$text"
+    printf -v row '%-*s' "$width" "$row"
+    if [[ -t 1 && -z "${NO_COLOR+x}" && "${TERM:-}" != dumb ]]; then
+        if [[ "${COLORTERM:-}" == truecolor || "${COLORTERM:-}" == 24bit ]]; then
+            case "$tone" in
+                blue) code='1;38;2;72;145;249' ;;
+                teal) code='1;38;2;0;224;199' ;;
+                muted) code='0;38;2;147;164;190' ;;
+                *) code='0;38;2;230;237;247' ;;
+            esac
+            printf '\033[%s;48;2;1;15;31m%s\033[0m\n' "$code" "$row"
+        else
+            case "$tone" in
+                blue) code='1;34' ;; teal) code='1;36' ;;
+                muted) code='0;37' ;; *) code='1;37' ;;
+            esac
+            printf '\033[%s;40m%s\033[0m\n' "$code" "$row"
+        fi
+    else
+        printf '%s\n' "${row%"${row##*[! ]}"}"
+    fi
+}
+
+print_banner_text() {
+    local line width
+    width=$(instruction_width)
+    while IFS= read -r line; do
+        line="${line%"${line##*[! ]}"}"
+        print_banner_row "$line" "${2:-text}"
+    done < <(printf '%s\n' "$1" | fold -s -w "$((width - 4))")
+}
+
+print_banner_rule() {
+    local rule width
+    width=$(instruction_width)
+    printf -v rule '%*s' "$((width - 4))" ''
+    print_banner_row "${rule// /-}" teal
+}
+
 print_logo() {
     local line width
     width=$(instruction_width)
     echo
+    print_banner_rule
+    print_banner_row ''
     # ASCII silhouettes derived from aquasec-icon-dark.png and aquasec-logo-.ai.
     if (( width >= 79 )); then
         while IFS= read -r line; do
-            print_colored_message cyan "$line"
+            print_banner_row "$line" blue 79
         done <<'AQUA_LOGO'
    ++######++       +####+   +####+  ##    ##  +####+  +######  +####+   +####+
  +############+    +##++### +##++##+ ##    ## +##++##+ ##+++++ +##++##+ +##++#+
@@ -20,7 +70,7 @@ print_logo() {
 AQUA_LOGO
     else
         while IFS= read -r line; do
-            print_colored_message cyan "$line"
+            print_banner_row "$line" blue 16
         done <<'AQUA_ICON'
    ++######++
  +############+
@@ -31,26 +81,29 @@ AQUA_LOGO
  +##############
    ++###########
 AQUA_ICON
-        print_colored_message cyan "aquasec"
+        print_banner_row ''
+        print_banner_row "aquasec" blue
     fi
-    echo
-    print_colored_message cyan "AQUA PROBE"
-    printf '%s\n' "Tool developed by Eric Gomes, Senior DevSecOps Architect @ Aqua Security" |
-        fold -s -w "$width"
-    echo
+    print_banner_row ''
+    print_banner_row "A Q U A   P R O B E" teal
+    print_banner_row ''
+    print_banner_text "Tool developed by Eric Gomes" muted
+    print_banner_text "Senior DevSecOps Architect @ Aqua Security" muted
+    print_banner_row ''
 }
 
 
 print_welcome_message() {
-    echo "=========================================================================================="
-    echo "          Welcome to Aqua Probe, the Aqua Security Runtime Input Validator Tool           "
-    echo "=========================================================================================="
-    echo "                                                                                          "
-    echo "     Explore various security features of Aqua Security with this interactive tool.       " 
-    echo "     Experience Real-time Malware Protection, Drift Prevention, and much more.            "
-    echo "     Get ready to dive into container security with Aqua!                                 "
-    echo "                                                                                          "
-    echo "=========================================================================================="
+    print_banner_rule
+    print_banner_row ''
+    print_banner_text "Welcome to Aqua Probe" teal
+    print_banner_text "The Aqua Security Runtime Input Validator Tool"
+    print_banner_row ''
+    print_banner_text "Explore Aqua Security's runtime security features." muted
+    print_banner_text "Real-time Malware Protection, Drift Prevention, and more." muted
+    print_banner_row ''
+    print_banner_rule
+    echo
 }
 
 #
