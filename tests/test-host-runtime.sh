@@ -87,4 +87,17 @@ done
 check_kubernetes_connection() { fail 'Host mode checked Kubernetes'; }
 cleanup_aqua_probe_artifacts() { fail 'Host exit ran unrelated cleanup'; }
 main --host-runtime <<< 0 >/dev/null
-printf 'PASS: SSH quoting, validation, confirmation, nine shared controls, FIM cleanup, secret transport, menu and standalone mode\n'
+
+# Main menu dispatches host controls directly, without entering a submenu.
+check_kubernetes_connection() { :; }
+check_aqua_agent_daemonset() { :; }
+check_aqua_kube_enforcer_deployment() { :; }
+check_container_existence() { return 1; }
+sleep() { :; }
+configure_host_runtime() { printf 'DISPATCH configure_host_runtime\n'; }
+host_runtime_menu() { fail 'Main menu entered the old host submenu'; }
+result=$(main <<< $'31\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42')
+for control in "${controls[@]}" configure_host_runtime; do
+    [[ "$result" == *"DISPATCH $control"* ]] || fail "Missing direct $control dispatch"
+done
+printf 'PASS: SSH quoting, validation, confirmation, nine shared controls, FIM cleanup, secret transport, direct menu and standalone mode\n'

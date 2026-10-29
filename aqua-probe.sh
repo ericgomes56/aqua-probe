@@ -283,65 +283,49 @@ print_menu_option() {
     done < <(printf '%s\n' "$label" | fold -s -w "$((width - 5))")
 }
 
-check_kubernetes_connection() {
-    echo -n "Checking Kubernetes connection"
-    for i in {1..10}; do
-        echo -n "."
-        sleep 0.2
-    done
-    print_colored_message green "[✓] Done"
+print_startup_check() {
+    local state="$1" step="$2" title="$3" detail="$4" tone label
+    case "$state" in
+        CHECK) tone=blue ;; PASS) tone=teal ;; FAIL) tone=red ;;
+    esac
+    printf -v label '  %-7s %s / 03  %s' "[$state]" "$step" "$title"
+    print_colored_message "$tone" "$label"
+    [[ -z "$detail" ]] || print_colored_message muted "         $detail"
+}
 
-    # Check if connected to a Kubernetes cluster
+check_kubernetes_connection() {
+    print_startup_check CHECK 01 'Kubernetes connection' 'Contacting the configured cluster'
     if kubectl cluster-info &>/dev/null; then
-        print_colored_message green "✓ Kubernetes cluster connected"
+        print_startup_check PASS 01 'Kubernetes connection' 'Cluster API is reachable'
         echo
     else
-        print_colored_message red "✗ Error: Not connected to a valid Kubernetes cluster."
+        print_startup_check FAIL 01 'Kubernetes connection' 'Check kubeconfig, credentials, and cluster reachability'
         exit 1
     fi
 }
 
 check_aqua_agent_daemonset() {
-    echo -n "Checking Aqua Enforcer (aqua-agent) daemonset"
-    for i in {1..10}; do
-        echo -n "."
-        sleep 0.2
+    local name
+    print_startup_check CHECK 02 'Aqua Enforcer' "DaemonSet discovery | namespace: $AQUA_PROBE_NAMESPACE"
+    for name in aqua-agent aqua-enforcer-ds kube-enforcer-ds "${AQUA_PROBE_DAEMONSET:-}"; do
+        [[ -n "$name" ]] || continue
+        if kubectl get daemonset -n "$AQUA_PROBE_NAMESPACE" "$name" &>/dev/null; then
+            print_startup_check PASS 02 'Aqua Enforcer' "Found DaemonSet: $name"
+            echo
+            return 0
+        fi
     done
-    print_colored_message green "[✓] Done"
-
-    # Check if aqua-agent daemonset exists in the aqua namespace
-    if kubectl get daemonset -n $AQUA_PROBE_NAMESPACE aqua-agent &>/dev/null; then
-        print_colored_message green "✓ Aqua Enforcer daemonset found"
-        echo
-    elif kubectl get daemonset -n $AQUA_PROBE_NAMESPACE aqua-enforcer-ds &>/dev/null; then
-        print_colored_message green "✓ Aqua Enforcer daemonset found"
-        echo
-    elif kubectl get daemonset -n $AQUA_PROBE_NAMESPACE kube-enforcer-ds &>/dev/null; then
-        print_colored_message green "✓ Aqua Enforcer daemonset found"
-        echo
-    elif kubectl get daemonset -n $AQUA_PROBE_NAMESPACE $AQUA_PROBE_DAEMONSET &>/dev/null; then
-        print_colored_message green "✓ Aqua Enforcer daemonset found"
-        echo
-    else
-        print_colored_message red "✗ Error: Aqua Enforcer daemonset not found. Please deploy the Aqua Enforcer."
-        exit 1
-    fi
+    print_startup_check FAIL 02 'Aqua Enforcer' 'DaemonSet not found or inaccessible; check installation and permissions'
+    exit 1
 }
 
 check_aqua_kube_enforcer_deployment() {
-    echo -n "Checking Aqua Kube-Enforcer (aqua-kube-enforcer) deployment"
-    for i in {1..10}; do
-        echo -n "."
-        sleep 0.2
-    done
-    print_colored_message green "[✓] Done"
-
-    # Check if aqua-kube-enforcer deployment exists in the Aqua namespace
-    if kubectl get deployment -n $AQUA_PROBE_NAMESPACE aqua-kube-enforcer &>/dev/null; then
-        print_colored_message green "✓ Aqua Kube-Enforcer deployment found"
+    print_startup_check CHECK 03 'Aqua Kube-Enforcer' "Deployment: aqua-kube-enforcer | namespace: $AQUA_PROBE_NAMESPACE"
+    if kubectl get deployment -n "$AQUA_PROBE_NAMESPACE" aqua-kube-enforcer &>/dev/null; then
+        print_startup_check PASS 03 'Aqua Kube-Enforcer' 'Deployment found: aqua-kube-enforcer'
         echo
     else
-        print_colored_message red "✗ Error: Aqua Kube-Enforcer deployment not found. Please deploy the Aqua Kube-Enforcer."
+        print_startup_check FAIL 03 'Aqua Kube-Enforcer' 'Deployment not found or inaccessible; check installation and permissions'
         exit 1
     fi
 }
@@ -3399,7 +3383,16 @@ print_main_menu() {
     echo
     print_colored_message blue "  HOST RUNTIME CONTROLS"
     print_menu_option 31 "Test Brute Force Login Detection [Host Runtime Policy]" text
-    print_menu_option 33 "Host Runtime controls [SSH]" teal
+    print_menu_option 33 "Test Block Cryptocurrency Mining [Host]" text
+    print_menu_option 34 "Test DNS/IP Reputation [Host]" text
+    print_menu_option 35 "Test File Block [Host]" text
+    print_menu_option 36 "Test File Integrity Monitoring [Host]" text
+    print_menu_option 37 "Test Forensics [Host]" text
+    print_menu_option 38 "Test Package Block [Host]" text
+    print_menu_option 39 "Test Port Scanning Detection [Host]" text
+    print_menu_option 40 "Test Secure AI - Discovery [Host]" text
+    print_menu_option 41 "Test Secure AI - Unauthorized Models [Host]" text
+    print_menu_option 42 "Select/change SSH host" teal
     echo
     print_colored_message blue "  SESSION"
     print_menu_option 32 "Terminate Program" yellow
@@ -3419,6 +3412,7 @@ main() {
         return $?
     fi
 
+    print_test_header 'Environment Checks' 'Kubernetes connectivity and Aqua installation'
     check_kubernetes_connection
     check_aqua_agent_daemonset
     check_aqua_kube_enforcer_deployment
@@ -3445,7 +3439,7 @@ main() {
 
     while true; do
         print_main_menu
-        read -p "$(format_prompt "Enter your choice (1-33): ")" choice
+        read -p "$(format_prompt "Enter your choice (1-42): ")" choice || return 0
 
         case $choice in
             1)
@@ -3545,7 +3539,37 @@ main() {
                 terminate_program
                 ;;
             33)
-                host_runtime_menu
+                test_host_cryptocurrency_mining
+                ;;
+            34)
+                test_host_dns_ip_reputation
+                ;;
+            35)
+                test_host_file_block
+                ;;
+            36)
+                test_host_file_integrity_monitoring
+                ;;
+            37)
+                test_host_forensics
+                ;;
+            38)
+                test_host_package_block
+                ;;
+            39)
+                test_host_port_scanning_detection
+                ;;
+            40)
+                test_host_secure_ai_discovery
+                ;;
+            41)
+                test_host_secure_ai_unauthorized_models
+                ;;
+            42)
+                configure_host_runtime
+                ;;
+            *)
+                print_colored_message yellow 'Choose an option from 1 to 42.'
                 ;;
         esac
 

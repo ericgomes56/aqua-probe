@@ -41,7 +41,7 @@ Aqua Probe is an interactive command-line tool for validating Aqua runtime secur
 30. Test Registries Allowed
 31. Test Brute Force Login Detection [Host Runtime Policy]
 
-Main menu option **33** opens the shared Host Runtime controls below. Option **32** remains Terminate Program.
+The main menu lists Host Runtime controls directly: **31** for Brute Force, **33-41** for the shared host tests, and **42** to select/change the SSH host. Option **32** remains Terminate Program.
 
 ## Limit Container Privileges
 
@@ -112,26 +112,26 @@ Configure Registries Allowed and choose an accessible image from an excluded reg
 
 ## Host Runtime Policies
 
-Use main menu option **33**, or open the Host Runtime menu directly without Kubernetes startup checks:
+Choose a test directly under **HOST RUNTIME CONTROLS** in the main menu, or launch the host-only interface without Kubernetes startup checks:
 
 ```bash
 ./aqua-probe.sh --host-runtime
 ```
 
-Select an authorized Linux lab host monitored by an Aqua Enforcer. Supply its SSH hostname/IP, port, username, and optional local `.pem`/private key path. The selected connection is reused within the session; option **11** changes it. Commands execute as that user without automatic sudo or package installation. Bash is required on the host. SSH host-key verification remains enabled. Each test requires explicit confirmation, even with `--no-instructions`.
+Select an authorized Linux lab host monitored by an Aqua Enforcer. Supply its SSH hostname/IP, port, username, and optional local `.pem`/private key path. The selected connection is reused within the session; main option **42** (host-only option **11**) changes it. Commands execute as that user without automatic sudo or package installation. Bash is required on the host. SSH host-key verification remains enabled. Each test requires explicit confirmation, even with `--no-instructions`.
 
-| Host menu | Control | Host validation |
-| --- | --- | --- |
-| 1 | Block Cryptocurrency Mining | `wget http://crypto-loot.com`, bounded timeout, no redirects, response discarded |
-| 2 | Brute Force Login Detection | Existing bounded SSH authentication-failure workflow; separate target/account prompts |
-| 3 | DNS/IP Reputation | `curl http://68.183.212.246`, bounded timeout, response discarded |
-| 4 | File Block | `cat /etc/passwd`; configure this path as blocked; prints account information if allowed |
-| 5 | File Integrity Monitoring | Create, modify, chmod, and delete disposable files under `/tmp/aqua-probe-host-fim-*` |
-| 6 | Forensics | `echo aqua-probe-forensics-marker`, `id`, and `ls /tmp`; review host process collection |
-| 7 | Package Block | `tar`; its ordinary missing-arguments error is not proof of enforcement |
-| 8 | Port Scanning Detection | Bash `/dev/tcp` probes on ports 1-1024 of an explicitly authorized destination; default `10.0.0.1`, maximum 16 concurrent one-second probes |
-| 9 | Secure AI - Discovery | One native Python 3 HTTPS request to OpenAI; review host AI Findings |
-| 10 | Secure AI - Unauthorized Models | Same host request, with model matching the configured policy, e.g. `OpenAI@gpt-4` |
+| Main menu | Host-only menu | Control | Host validation |
+| --- | --- | --- | --- |
+| 33 | 1 | Block Cryptocurrency Mining | `wget http://crypto-loot.com`, bounded timeout, no redirects, response discarded |
+| 31 | 2 | Brute Force Login Detection | Existing bounded SSH authentication-failure workflow; separate target/account prompts |
+| 34 | 3 | DNS/IP Reputation | `curl http://68.183.212.246`, bounded timeout, response discarded |
+| 35 | 4 | File Block | `cat /etc/passwd`; configure this path as blocked; prints account information if allowed |
+| 36 | 5 | File Integrity Monitoring | Create, modify, chmod, and delete disposable files under `/tmp/aqua-probe-host-fim-*` |
+| 37 | 6 | Forensics | `echo aqua-probe-forensics-marker`, `id`, and `ls /tmp`; review host process collection |
+| 38 | 7 | Package Block | `tar`; its ordinary missing-arguments error is not proof of enforcement |
+| 39 | 8 | Port Scanning Detection | Bash `/dev/tcp` probes on ports 1-1024 of an explicitly authorized destination; default `10.0.0.1`, maximum 16 concurrent one-second probes |
+| 40 | 9 | Secure AI - Discovery | One native Python 3 HTTPS request to OpenAI; review host AI Findings |
+| 41 | 10 | Secure AI - Unauthorized Models | Same host request, with model matching the configured policy, e.g. `OpenAI@gpt-4` |
 
 Scope the corresponding **Host Runtime Policy** to the selected host and verify Enforcer coverage and feature availability. Shared commands can exercise the same signatures, but policy mode, network reputation, scan thresholds, host OS, and tenant support determine results. Failures from SSH, missing tools, network access, or permissions are not evidence of an Aqua block. Verify the matching host, policy, and timestamp in **Security Reports -> Audit**, or the relevant forensic/AI view.
 
@@ -139,7 +139,7 @@ Host FIM deliberately never modifies or deletes the real `/etc/sudoers`. Configu
 
 Secure AI requires native Python 3, HTTPS connectivity, model access, and supported host Secure AI coverage. The model is prompted (default `gpt-4` for consistency with the existing example); select an available Chat Completions model and match the policy. A retired/unavailable model or API billing/authentication error is not an Aqua detection. A request can incur provider charges. The key prompt is hidden, shell tracing is disabled for the request, and the key travels only through encrypted SSH stdin to the host process and HTTPS to OpenAI, never in command arguments, files, or environment variables. Each request asks for a fresh key. The API request follows the [OpenAI Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
 
-Host menu option **0** returns to the main menu, or exits when launched with `--host-runtime`. It does not run unrelated Kubernetes/Docker cleanup. Run `bash tests/test-host-runtime.sh` for offline mocked tests; these do not contact a host or OpenAI.
+In `--host-runtime` mode, option **0** exits without running unrelated Kubernetes/Docker cleanup. The regular main menu runs host tests directly without a submenu. Run `bash tests/test-host-runtime.sh` for offline mocked tests; these do not contact a host or OpenAI.
 
 ### Brute Force Login Detection
 
@@ -162,6 +162,8 @@ The following host-specific controls remain catalog items without dedicated host
 The banner, control headings, menu, prompts, and status messages share [Aqua's website palette](https://www.aquasec.com/): electric blue and teal on deep navy. Teal highlights prompts and review guidance, yellow marks prerequisites and warnings, and magenta marks errors. Titles are centered, menu entries and prerequisites wrap to the terminal width, and menu groups distinguish workload controls from host controls without changing option numbers. Commands and external tool output remain plain and copyable. True-color terminals use the exact brand colors; other color terminals use standard ANSI equivalents. Set `NO_COLOR=1` for plain-text output; redirected output and `TERM=dumb` also omit color codes.
 
 Run `bash tests/test-terminal-theme.sh` to check the terminal formatting without deploying resources or executing security tests.
+
+Startup uses a themed **Environment Checks** section with numbered `CHECK`, `PASS`, and `FAIL` states. A pass is printed only after the relevant Kubernetes command succeeds; DaemonSet/deployment checks confirm resource existence, not workload readiness. Run `bash tests/test-startup-checks.sh` to validate these checks offline.
 
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
 2. Run the script by executing `./aqua-probe.sh`.
