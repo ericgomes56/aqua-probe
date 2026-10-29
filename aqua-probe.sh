@@ -2,6 +2,28 @@
 
 # Brand palette from aquasec.com: ink-deep, electric-blue, teal, and text-muted.
 # Keep background/color resets on every row so the shell retains its own theme.
+theme_code() {
+    local tone="$1"
+    if [[ "${COLORTERM:-}" == truecolor || "${COLORTERM:-}" == 24bit ]]; then
+        case "$tone" in
+            blue) printf '1;38;2;72;145;249' ;;
+            cyan|teal|green) printf '1;38;2;0;224;199' ;;
+            red) printf '1;38;2;255;0;73' ;;
+            yellow) printf '1;38;2;255;251;113' ;;
+            muted) printf '0;38;2;147;164;190' ;;
+            *) printf '0;38;2;230;237;247' ;;
+        esac
+        printf ';48;2;1;15;31'
+    else
+        case "$tone" in
+            blue) printf '1;34' ;; cyan|teal|green) printf '1;36' ;;
+            red) printf '1;31' ;; yellow) printf '1;33' ;;
+            muted) printf '0;37' ;; *) printf '1;37' ;;
+        esac
+        printf ';40'
+    fi
+}
+
 print_banner_row() {
     local text="$1" tone="${2:-text}" block_width="${3:-0}"
     local width padding row code
@@ -12,21 +34,8 @@ print_banner_row() {
     printf -v row '%*s%s' "$padding" '' "$text"
     printf -v row '%-*s' "$width" "$row"
     if [[ -t 1 && -z "${NO_COLOR+x}" && "${TERM:-}" != dumb ]]; then
-        if [[ "${COLORTERM:-}" == truecolor || "${COLORTERM:-}" == 24bit ]]; then
-            case "$tone" in
-                blue) code='1;38;2;72;145;249' ;;
-                teal) code='1;38;2;0;224;199' ;;
-                muted) code='0;38;2;147;164;190' ;;
-                *) code='0;38;2;230;237;247' ;;
-            esac
-            printf '\033[%s;48;2;1;15;31m%s\033[0m\n' "$code" "$row"
-        else
-            case "$tone" in
-                blue) code='1;34' ;; teal) code='1;36' ;;
-                muted) code='0;37' ;; *) code='1;37' ;;
-            esac
-            printf '\033[%s;40m%s\033[0m\n' "$code" "$row"
-        fi
+        code=$(theme_code "$tone")
+        printf '\033[%sm%s\033[0m\n' "$code" "$row"
     else
         printf '%s\n' "${row%"${row##*[! ]}"}"
     fi
@@ -204,13 +213,13 @@ handle_flags() {
 print_colored_message() {
     local color="$1"
     local message="$2"
-    local code
-    case "$color" in
-        red) code=31 ;; blue) code=34 ;; green) code=32 ;;
-        yellow) code=33 ;; cyan) code=36 ;; *) code=0 ;;
-    esac
+    local code line width
+    width=$(instruction_width)
     if [[ -t 1 && -z "${NO_COLOR+x}" && "${TERM:-}" != dumb ]]; then
-        printf '\033[0;%sm%s\033[0m\n' "$code" "$message"
+        code=$(theme_code "$color")
+        while IFS= read -r line; do
+            printf '\033[%sm%-*s\033[0m\n' "$code" "$width" "$line"
+        done < <(printf '%s\n' "$message" | fold -s -w "$width")
     else
         printf '%s\n' "$message"
     fi
@@ -225,15 +234,14 @@ instruction_width() {
 }
 
 print_test_header() {
-    local title="$1" scope="${2:-Container Runtime Policy}" width rule
-    width=$(instruction_width)
-    printf -v rule '%*s' "$width" ''
-    rule=${rule// /-}
+    local title="$1" scope="${2:-Container Runtime Policy}"
     echo
-    print_colored_message cyan "$rule"
-    printf 'AQUA PROBE | %s\n' "$title" | fold -s -w "$width"
-    print_colored_message cyan "$scope"
-    print_colored_message cyan "$rule"
+    print_banner_rule
+    print_banner_text "AQUA PROBE" teal
+    print_banner_text "$title" blue
+    print_banner_text "$scope" muted
+    print_banner_rule
+    echo
 }
 
 print_instructions() {
@@ -243,14 +251,16 @@ print_instructions() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         line="${line#"${line%%[![:space:]]*}"}"
         [[ -n "$line" ]] || continue
-        printf '%s\n' "$line" | fold -s -w "$((width - 2))" | sed 's/^/  /'
+        while IFS= read -r line; do
+            print_colored_message text "  $line"
+        done < <(printf '%s\n' "$line" | fold -s -w "$((width - 2))")
     done <<< "$1"
     echo
 }
 
 format_prompt() {
     if [[ -t 2 && -z "${NO_COLOR+x}" && "${TERM:-}" != dumb ]]; then
-        printf '\033[0;36m> %s\033[0m' "$1"
+        printf '\033[%sm> %s\033[0m' "$(theme_code teal)" "$1"
     else
         printf '> %s' "$1"
     fi
@@ -259,8 +269,18 @@ format_prompt() {
 print_audit_review() {
     echo
     print_colored_message green "REVIEW IN AQUA"
-    printf '  Security Reports -> Audit\n'
-    printf '  Review the event, effective policy, and affected workload.\n'
+    print_colored_message blue '  Security Reports -> Audit'
+    print_colored_message text '  Review the event, effective policy, and affected workload.'
+}
+
+print_menu_option() {
+    local number="$1" label="$2" tone="${3:-text}" line prefix width
+    width=$(instruction_width)
+    printf -v prefix ' %2s. ' "$number"
+    while IFS= read -r line; do
+        print_colored_message "$tone" "$prefix$line"
+        prefix='     '
+    done < <(printf '%s\n' "$label" | fold -s -w "$((width - 5))")
 }
 
 check_kubernetes_connection() {
@@ -2921,7 +2941,7 @@ $instructions"
 
 review_container_control() {
     print_audit_review
-    echo "A Kubernetes rejection, image pull failure or command error alone does not prove Aqua blocked the action."
+    print_colored_message yellow "A Kubernetes rejection, image pull failure or command error alone does not prove Aqua blocked the action."
 }
 
 create_control_pod() {
@@ -2933,7 +2953,7 @@ create_control_pod() {
         [[ "$owner" == dedicated ]] || { echo "Refusing to replace a pod not owned by this test."; return 1; }
         kubectl delete pod "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" --wait=true || return 1
     elif kubectl get pod "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" >/dev/null 2>&1; then
-        echo "A pod with this name already exists without the test ownership label."; return 1
+        print_colored_message text "A pod with this name already exists without the test ownership label."; return 1
     fi
     kubectl run "$pod" -n "$AQUA_PROBE_TEST_NAMESPACE" --image="$image" \
         --image-pull-policy=Always --restart=Never --labels=aqua-probe-control=dedicated \
@@ -2949,11 +2969,11 @@ test_block_outdated_images() {
     local image
     confirm_container_control "Block Outdated Images" "Enable Block Outdated Images in Enforce mode. Choose an image confirmed as outdated by your Aqua policy's configured criteria. An old tag alone is not evidence. Keep unrelated image controls from masking the result." || return
     image=$(prompt_for_test_image "Image classified as outdated by the configured policy") || return
-    echo "The default image is only a candidate; verify that it meets the outdated-image criteria."
+    print_colored_message yellow "The default image is only a candidate; verify that it meets the outdated-image criteria."
     if create_control_pod aqua-outdated-image-test "$image"; then
-        echo "Pod became ready. Verify the policy matches and whether Aqua considered this image outdated."
+        print_colored_message text "Pod became ready. Verify the policy matches and whether Aqua considered this image outdated."
     else
-        echo "Pod did not become ready; inspect the Kubernetes output and Aqua audit evidence."
+        print_colored_message yellow "Pod did not become ready; inspect the Kubernetes output and Aqua audit evidence."
     fi
     review_container_control
 }
@@ -2970,19 +2990,19 @@ The pod requests CHOWN as its only capability; Aqua should remove it through the
     image=$(prompt_for_test_image "Linux image with sleep, touch, chown and cat") || return
     overrides='{"spec":{"nodeSelector":{"kubernetes.io/os":"linux"},"containers":[{"name":"aqua-capabilities-block-test","securityContext":{"runAsUser":0,"capabilities":{"drop":["ALL"],"add":["CHOWN"]}}}]}}'
     if create_control_pod aqua-capabilities-block-test "$image" "$overrides"; then
-        echo "Inspect CapEff and CapBnd in PID 1's status; CHOWN is bit 0 and should be absent after dropping it."
+        print_colored_message text "Inspect CapEff and CapBnd in PID 1's status; CHOWN is bit 0 and should be absent after dropping it."
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- cat /proc/1/status || return 1
         if ! kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- touch /tmp/aqua-chown-test; then
-            echo "File setup failed; the CHOWN test was not attempted."
+            print_colored_message yellow "File setup failed; the CHOWN test was not attempted."
             return 1
         fi
         if kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-capabilities-block-test -- chown 12345 /tmp/aqua-chown-test; then
-            echo "Ownership change succeeded; verify the blocked capability and policy scope."
+            print_colored_message text "Ownership change succeeded; verify the blocked capability and policy scope."
         else
-            echo "Ownership change failed; confirm CHOWN was removed and the intended policy applied before attributing the failure to Aqua."
+            print_colored_message yellow "Ownership change failed; confirm CHOWN was removed and the intended policy applied before attributing the failure to Aqua."
         fi
     fi
-    echo "Capability removal may surface as a kernel permission error; an Aqua incident for each denied operation is not guaranteed."
+    print_colored_message yellow "Capability removal may surface as a kernel permission error; an Aqua incident for each denied operation is not guaranteed."
     review_container_control
 }
 
@@ -2992,17 +3012,17 @@ test_executables_allowed() {
     confirm_container_control "Executables Allowed" "Enable Executables Allowed in Enforce mode. Allow sleep and date (including their resolved image paths) but exclude uname. Allow container exec. Use an image containing all three executables." || return
     image=$(prompt_for_test_image "Image with sleep, date and uname") || return
     if create_control_pod aqua-executables-allowed-test "$image"; then
-        echo "Allowed baseline: date"
+        print_colored_message text "Allowed baseline: date"
         if ! kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-executables-allowed-test -- date; then
-            echo "Allowed baseline failed; correct the image or policy before interpreting the negative test."
+            print_colored_message yellow "Allowed baseline failed; correct the image or policy before interpreting the negative test."
             review_container_control
             return 1
         fi
-        echo "Excluded executable: uname -a"
+        print_colored_message text "Excluded executable: uname -a"
         if kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-executables-allowed-test -- uname -a; then
-            echo "Excluded executable ran; check the allowlist and effective policy."
+            print_colored_message text "Excluded executable ran; check the allowlist and effective policy."
         else
-            echo "Excluded executable failed; confirm an Executables Allowed event in Aqua."
+            print_colored_message yellow "Excluded executable failed; confirm an Executables Allowed event in Aqua."
         fi
     fi
     review_container_control
@@ -3017,8 +3037,8 @@ test_forensics() {
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-forensics-test -- echo aqua-probe-forensics-marker || return 1
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-forensics-test -- id || return 1
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-forensics-test -- ls /tmp || return 1
-        echo "Review this pod's forensic activity in Aqua for echo, id, ls and the aqua-probe-forensics-marker argument."
-        echo "Command success verifies execution only; confirm collection in Aqua. A security incident is not required."
+        print_colored_message text "Review this pod's forensic activity in Aqua for echo, id, ls and the aqua-probe-forensics-marker argument."
+        print_colored_message text "Command success verifies execution only; confirm collection in Aqua. A security incident is not required."
     fi
 }
 
@@ -3032,9 +3052,9 @@ test_limit_new_privileges() {
         output=$(kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" aqua-new-privileges-test -- cat /proc/1/status) || return 1
         printf '%s\n' "$output" | awk '/^NoNewPrivs:/ {print}'
         if printf '%s\n' "$output" | awk '/^NoNewPrivs:/ && $2 == 1 {found=1} END {exit !found}'; then
-            echo "PID 1 has no-new-privileges set. Check effective policy and admission mutations to establish which control set it."
+            print_colored_message text "PID 1 has no-new-privileges set. Check effective policy and admission mutations to establish which control set it."
         else
-            echo "NoNewPrivs was not confirmed as 1; review policy scope and runtime support."
+            print_colored_message yellow "NoNewPrivs was not confirmed as 1; review policy scope and runtime support."
         fi
     fi
     review_container_control
@@ -3045,11 +3065,11 @@ test_registries_allowed() {
     local image
     confirm_container_control "Registries Allowed" "Configure the allowed registry list in your Container Runtime Policy and enable enforcement. Select a real, accessible image from a registry excluded from that list. Ensure pull credentials are configured if needed and other image controls do not mask this test." || return
     image=$(prompt_for_test_image "Image from a registry outside the allowed list") || return
-    echo "The default uses Docker Hub; it triggers this test only if Docker Hub is excluded."
+    print_colored_message text "The default uses Docker Hub; it triggers this test only if Docker Hub is excluded."
     if create_control_pod aqua-registries-allowed-test "$image"; then
-        echo "Pod became ready; review the registry allowlist and effective policy."
+        print_colored_message text "Pod became ready; review the registry allowlist and effective policy."
     else
-        echo "Pod did not become ready. Distinguish an Aqua registry denial from missing credentials or ImagePullBackOff."
+        print_colored_message yellow "Pod did not become ready. Distinguish an Aqua registry denial from missing credentials or ImagePullBackOff."
     fi
     review_container_control
 }
@@ -3068,16 +3088,16 @@ This test connects directly to host SSH; it does not deploy or exec into a conta
     command -v ssh >/dev/null 2>&1 || { echo "OpenSSH client is required."; return 1; }
     read -r -p "$(format_prompt "Monitored host IP or hostname: ")" host || return
     if [[ ! "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]]; then
-        echo "Invalid hostname or IP address."; return 1
+        print_colored_message text "Invalid hostname or IP address."; return 1
     fi
     read -r -p "$(format_prompt "Dedicated test account username: ")" login_user || return
     if [[ ! "$login_user" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
-        echo "Invalid username."; return 1
+        print_colored_message text "Invalid username."; return 1
     fi
     read -r -p "$(format_prompt "SSH port [22]: ")" port || return
     port=${port:-22}
     if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
-        echo "Invalid SSH port."; return 1
+        print_colored_message text "Invalid SSH port."; return 1
     fi
     read -r -p "$(format_prompt "SSH private key file path (e.g. ~/.ssh/test.pem; Enter for password authentication): ")" key_file || return
     if [[ -n "$key_file" ]]; then
@@ -3085,44 +3105,88 @@ This test connects directly to host SSH; it does not deploy or exec into a conta
             '~/'*) key_file="$HOME/${key_file#\~/}" ;;
         esac
         if [[ ! -f "$key_file" || ! -r "$key_file" ]]; then
-            echo "SSH key file must be an existing, readable file."; return 1
+            print_colored_message text "SSH key file must be an existing, readable file."; return 1
         fi
         auth_options=(-i "$key_file" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o PubkeyAuthentication=yes)
-        echo "Using key authentication. SSH will prompt for the key passphrase if required."
-        echo "A valid authorized key succeeds and stops this test; successful logins do not simulate brute-force failures."
+        print_colored_message text "Using key authentication. SSH will prompt for the key passphrase if required."
+        print_colored_message yellow "A valid authorized key succeeds and stops this test; successful logins do not simulate brute-force failures."
     else
         auth_options=(-o PreferredAuthentications=password -o PubkeyAuthentication=no)
     fi
     read -r -p "$(format_prompt "Number of login attempts [5, maximum 10]: ")" attempts || return
     attempts=${attempts:-5}
     if [[ ! "$attempts" =~ ^([1-9]|10)$ ]]; then
-        echo "Enter an attempt count from 1 to 10."; return 1
+        print_colored_message text "Enter an attempt count from 1 to 10."; return 1
     fi
     read -r -p "$(format_prompt "Proceed with $attempts test logins to $host? (y/n): ")" proceed || return
     [[ "$proceed" =~ ^[Yy]$ ]] || return 0
 
     for ((attempt=1; attempt<=attempts; attempt++)); do
-        echo "Login attempt $attempt/$attempts."
+        print_colored_message text "Login attempt $attempt/$attempts."
         [[ -n "$key_file" ]] || echo "Enter an intentionally incorrect password."
         if ssh -p "$port" -l "$login_user" \
             "${auth_options[@]}" \
             -o NumberOfPasswordPrompts=1 -o ConnectTimeout=5 -o ConnectionAttempts=1 \
             -o ControlMaster=no -o ControlPath=none "$host" true; then
-            echo "Authentication succeeded unexpectedly; stopping the test."
+            print_colored_message yellow "Authentication succeeded unexpectedly; stopping the test."
             return 1
         else
             status=$?
         fi
         if [[ "$status" -ne 255 ]]; then
-            echo "SSH stopped with status $status; ending the test."
+            print_colored_message yellow "SSH stopped with status $status; ending the test."
             return 1
         fi
-        echo "SSH did not complete successfully. Verify its output shows an authentication failure, not a connection or host-key error."
+        print_colored_message yellow "SSH did not complete successfully. Verify its output shows an authentication failure, not a connection or host-key error."
     done
-    echo "Review the host authentication logs to confirm the failed login attempts."
+    print_colored_message yellow "Review the host authentication logs to confirm the failed login attempts."
     print_audit_review
-    echo "An Aqua detection depends on the Host Runtime Policy threshold, time window, and host coverage."
-    echo "No test resources were created; host authentication and audit records remain for review."
+    print_colored_message text "An Aqua detection depends on the Host Runtime Policy threshold, time window, and host coverage."
+    print_colored_message text "No test resources were created; host authentication and audit records remain for review."
+}
+
+print_main_menu() {
+    print_test_header "Security Controls" "Select a control to validate"
+    print_colored_message blue "  TEST ENVIRONMENT"
+    print_menu_option 1 "Deploy/Redeploy test container" teal
+    echo
+    print_colored_message blue "  RUNTIME & WORKLOAD CONTROLS"
+    print_menu_option 2 "Test Bad DNS/IP Reputation" text
+    print_menu_option 3 "Test Block Container Exec" text
+    print_menu_option 4 "Test Block Cryptocurrency Mining" text
+    print_menu_option 5 "Test Block Fileless Execution" text
+    print_menu_option 6 "Test Block Non-compliant Images" text
+    print_menu_option 7 "Test Block Non-compliant Resources" text
+    print_menu_option 8 "Test Block Non-Kubernetes Containers" text
+    print_menu_option 9 "Test Block Reverse Shell" text
+    print_menu_option 10 "Test Block Unregistered Images" text
+    print_menu_option 11 "Test Drift Prevention" text
+    print_menu_option 12 "Test Executables Blocked" text
+    print_menu_option 13 "Test File Block" text
+    print_menu_option 14 "Test File Integrity Monitoring" text
+    print_menu_option 15 "Test Limit Container Privileges" text
+    print_menu_option 16 "Test Package Block" text
+    print_menu_option 17 "Test Port Block" text
+    print_menu_option 18 "Test Port Scanning Detection" text
+    print_menu_option 19 "Test Real-time Malware Protection [Delete action]" text
+    print_menu_option 20 "Test Secure AI - Discovery" text
+    print_menu_option 21 "Test Secure AI - Protection" text
+    print_menu_option 22 "Test Secure AI - Unauthorized Models" text
+    print_menu_option 23 "Test System Integrity Monitoring" text
+    print_menu_option 24 "Test Volumes Blocked" text
+    print_menu_option 25 "Test Block Outdated Images" text
+    print_menu_option 26 "Test Capabilities Block" text
+    print_menu_option 27 "Test Executables Allowed" text
+    print_menu_option 28 "Test Forensics" text
+    print_menu_option 29 "Test Limit New Privileges" text
+    print_menu_option 30 "Test Registries Allowed" text
+    echo
+    print_colored_message blue "  HOST RUNTIME CONTROLS"
+    print_menu_option 31 "Test Brute Force Login Detection [Host Runtime Policy]" text
+    echo
+    print_colored_message blue "  SESSION"
+    print_menu_option 32 "Terminate Program" yellow
+    echo
 }
 
 main() {
@@ -3163,41 +3227,7 @@ main() {
     echo
 
     while true; do
-        echo "Please select an option:"
-        echo "1. Deploy/Redeploy test container"
-        echo "2. Test Bad DNS/IP Reputation"
-        echo "3. Test Block Container Exec"
-        echo "4. Test Block Cryptocurrency Mining"
-        echo "5. Test Block Fileless Execution"
-        echo "6. Test Block Non-compliant Images"
-        echo "7. Test Block Non-compliant Resources"
-        echo "8. Test Block Non-Kubernetes Containers"
-        echo "9. Test Block Reverse Shell"
-        echo "10. Test Block Unregistered Images"
-        echo "11. Test Drift Prevention"
-        echo "12. Test Executables Blocked"
-        echo "13. Test File Block"
-        echo "14. Test File Integrity Monitoring"
-        echo "15. Test Limit Container Privileges"
-        echo "16. Test Package Block"
-        echo "17. Test Port Block"
-        echo "18. Test Port Scanning Detection"
-        echo "19. Test Real-time Malware Protection [Delete action]"
-        echo "20. Test Secure AI - Discovery"
-        echo "21. Test Secure AI - Protection"
-        echo "22. Test Secure AI - Unauthorized Models"
-        echo "23. Test System Integrity Monitoring"
-        echo "24. Test Volumes Blocked"
-        echo "25. Test Block Outdated Images"
-        echo "26. Test Capabilities Block"
-        echo "27. Test Executables Allowed"
-        echo "28. Test Forensics"
-        echo "29. Test Limit New Privileges"
-        echo "30. Test Registries Allowed"
-        echo "31. Test Brute Force Login Detection [Host Runtime Policy]"
-        echo "32. Terminate Program"
-        echo
-
+        print_main_menu
         read -p "$(format_prompt "Enter your choice (1-32): ")" choice
 
         case $choice in
