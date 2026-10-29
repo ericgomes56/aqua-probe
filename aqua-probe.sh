@@ -3477,6 +3477,104 @@ test_host_windows_registry_protection() { test_windows_registry_control Protecti
 test_host_secure_ai_discovery() { test_host_secure_ai Discovery; }
 test_host_secure_ai_unauthorized_models() { test_host_secure_ai 'Unauthorized Models'; }
 
+host_os_identity_probe() {
+    local platform="$1" host="$2" user="$3" port="$4" key="$5" command
+    local -a auth=()
+    case "$platform" in
+        linux) command=id ;;
+        windows) command='whoami.exe /all' ;;
+        *) return 1 ;;
+    esac
+    [[ -z "$key" ]] || auth=(-i "$key" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey)
+    # Force a fresh SSH authentication, not an existing multiplexed connection.
+    ssh -T -p "$port" -l "$user" "${auth[@]}" \
+        -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o ConnectionAttempts=1 \
+        -o ControlMaster=no -o ControlPath=none "$host" "$command" </dev/null
+}
+
+test_host_os_users_groups() {
+    local mode="$1" platform host user port key subject group expected proceed status
+    local user_pattern='^[a-zA-Z0-9_][a-zA-Z0-9_.@\\-]*$'
+    print_test_header "OS Users and Groups $mode" 'Host Runtime Policy | Linux or Windows'
+    print_instructions 'Use an authorized lab host with the matching Linux or Windows Aqua Enforcer connected.
+Use an existing dedicated account with VALID credentials. This is not a brute-force test: it makes one baseline login and one fresh policy-validation login.
+Keep a separate administrator recovery session AND out-of-band console access. An allowlist can lock out every unlisted administrator; preserve recovery users/groups explicitly.
+Check OS/account lockout rules. Do not modify production access policies. The script creates no accounts/groups and never changes Aqua policies automatically.'
+    command -v ssh >/dev/null || { print_colored_message red 'OpenSSH is required.'; return 1; }
+    read -r -p "$(format_prompt 'Host OS (linux/windows): ')" platform || return 1
+    [[ "$platform" == linux || "$platform" == windows ]] || { print_colored_message red 'Choose linux or windows.'; return 1; }
+    read -r -p "$(format_prompt 'Monitored SSH hostname/IP: ')" host || return 1
+    [[ "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]] || { print_colored_message red 'Invalid host.'; return 1; }
+    read -r -p "$(format_prompt 'Dedicated test username (Windows may use DOMAIN\user): ')" user || return 1
+    [[ "$user" =~ $user_pattern ]] || { print_colored_message red 'Invalid username.'; return 1; }
+    read -r -p "$(format_prompt 'SSH port [22]: ')" port || return 1
+    port=${port:-22}
+    [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 )) || { print_colored_message red 'Invalid port.'; return 1; }
+    read -r -p "$(format_prompt 'SSH key file (.pem; Enter for SSH default authentication): ')" key || return 1
+    case "$key" in '~/'*) key="$HOME/${key#\~/}" ;; esac
+    if [[ -n "$key" && ( ! -f "$key" || ! -r "$key" ) ]]; then print_colored_message red 'Key must exist and be readable.'; return 1; fi
+    read -r -p "$(format_prompt 'Validate a user or group rule (user/group): ')" subject || return 1
+    case "$subject" in
+        user) group='(user rule)' ;;
+        group)
+            read -r -p "$(format_prompt 'Exact Linux group or Windows AD group name: ')" group || return 1
+            [[ -n "$group" && "$group" != *$'\033'* && "$group" != *$'\r'* ]] || { print_colored_message red 'Enter a valid group name.'; return 1; }
+            ;;
+        *) print_colored_message red 'Choose user or group.'; return 1 ;;
+    esac
+    read -r -p "$(format_prompt 'Expected login after policy (allow/deny) [deny]: ')" expected || return 1
+    expected=${expected:-deny}
+    [[ "$expected" == allow || "$expected" == deny ]] || { print_colored_message red 'Choose allow or deny.'; return 1; }
+    print_colored_message blue "Target: $user@$host:$port | $platform | $subject | $group | expected: $expected"
+    print_instructions 'Before applying the test restriction, verify this account can authenticate. SSH will prompt for a valid password or key passphrase if required; Aqua Probe does not collect or store it.'
+    read -r -p "$(format_prompt 'Recovery access verified and baseline login authorized? Type yes: ')" proceed || return 1
+    [[ "$proceed" == yes ]] || return 0
+    print_colored_message blue 'BASELINE | Authenticating with valid credentials'
+    if host_os_identity_probe "$platform" "$host" "$user" "$port" "$key"; then
+        print_colored_message teal 'Baseline login and identity command succeeded.'
+    else
+        print_colored_message red 'Baseline failed. Fix authentication, host access, or identity-command permissions before applying a policy. No enforcement test was attempted.'
+        return 1
+    fi
+    if [[ "$mode" == Allowed ]]; then
+        if [[ "$expected" == allow ]]; then
+            print_instructions "In OS Users and Groups Allowed, add the test user to Users Allowed OR its selected group to Groups Allowed. For a group test, use Groups Allowed and avoid a direct user entry masking the group rule. Preserve recovery identities."
+        else
+            print_instructions "In OS Users and Groups Allowed, preserve recovery identities but exclude the test user from Users Allowed AND every group it belongs to from Groups Allowed. For a group test, verify membership in '$group' and ensure no other membership grants access."
+        fi
+    else
+        if [[ "$expected" == deny ]]; then
+            if [[ "$subject" == user ]]; then
+                print_instructions "In OS Users and Groups Blocked, add '$user' to Users Blocked. Keep Groups Blocked from masking this user rule. Never block recovery identities."
+            else
+                print_instructions "In OS Users and Groups Blocked, add '$group' to Groups Blocked without a direct user block masking the group rule. Never block recovery users or their groups."
+            fi
+        else
+            print_instructions 'In OS Users and Groups Blocked, exclude the test user from Users Blocked AND all of its groups from Groups Blocked. Keep unrelated allowlist controls from denying access.'
+        fi
+    fi
+    print_instructions 'Review the baseline identity/group output before changing policy. For group tests the test account must actually belong to the named Linux group or Windows AD group; typing a name here does not change membership.
+Apply the Host Runtime Policy in Enforce mode to this host, save it, and wait for Enforcer sync. Keep the other OS Users and Groups control from masking this test. Windows testing requires Windows Aqua Enforcer and Windows OpenSSH; this workflow does not validate RDP or interactive console authentication.'
+    read -r -p "$(format_prompt 'Membership verified, policy synced, recovery retained; run one new login? Type yes: ')" proceed || proceed=no
+    if [[ "$proceed" == yes ]]; then
+        print_colored_message blue 'VALIDATION | Fresh SSH authentication'
+        status=0
+        host_os_identity_probe "$platform" "$host" "$user" "$port" "$key" || status=$?
+        print_colored_message text "Expected: $expected | SSH/identity command exit status: $status"
+        if (( status == 0 )); then
+            print_colored_message text 'Login and identity command succeeded. If denial was expected, inspect effective policy, scope, identity matching, and group membership.'
+        else
+            print_colored_message yellow 'Login or identity command failed. Check SSH output and host authentication logs; credentials, transport, native OS permissions, and Aqua policy can all cause failure.'
+        fi
+        print_audit_review
+        print_colored_message text "Filter by host $host, account $user, policy, and test time. Confirm a matching Host Runtime Policy event before attributing a denial to Aqua. An allowed login may not produce an incident."
+    fi
+    print_colored_message yellow 'Restore the original policy entries using your recovery access and verify normal access. Aqua Probe does not revert policy changes; authentication/audit records remain.'
+}
+
+test_host_os_users_groups_allowed() { test_host_os_users_groups Allowed; }
+test_host_os_users_groups_blocked() { test_host_os_users_groups Blocked; }
+
 host_runtime_menu() {
     local choice
     while true; do
@@ -3487,16 +3585,18 @@ host_runtime_menu() {
         print_menu_option 4 'File Block'
         print_menu_option 5 'File Integrity Monitoring'
         print_menu_option 6 'Forensics'
-        print_menu_option 7 'Package Block'
-        print_menu_option 8 'Port Scanning Detection'
-        print_menu_option 9 'Secure AI - Discovery'
-        print_menu_option 10 'Secure AI - Unauthorized Models'
-        print_menu_option 11 'Select/change Linux SSH host' teal
-        print_menu_option 12 'Windows Registry Monitoring [Windows only]'
-        print_menu_option 13 'Windows Registry Protection [Windows only]'
-        print_menu_option 14 'Clean up Windows registry test' yellow
+        print_menu_option 7 'OS Users and Groups Allowed [Linux/Windows]'
+        print_menu_option 8 'OS Users and Groups Blocked [Linux/Windows]'
+        print_menu_option 9 'Package Block'
+        print_menu_option 10 'Port Scanning Detection'
+        print_menu_option 11 'Secure AI - Discovery'
+        print_menu_option 12 'Secure AI - Unauthorized Models'
+        print_menu_option 13 'Select/change Linux SSH host' teal
+        print_menu_option 14 'Windows Registry Monitoring [Windows only]'
+        print_menu_option 15 'Windows Registry Protection [Windows only]'
+        print_menu_option 16 'Clean up Windows registry test' yellow
         print_menu_option 0 'Leave Host Runtime menu (exit in --host-runtime mode)' yellow
-        read -r -p "$(format_prompt 'Select a host control (0-14): ')" choice || { cleanup_windows_registry_test; return $?; }
+        read -r -p "$(format_prompt 'Select a host control (0-16): ')" choice || { cleanup_windows_registry_test; return $?; }
         case "$choice" in
             0) if cleanup_windows_registry_test; then return 0; fi ;;
             1) test_host_cryptocurrency_mining ;;
@@ -3505,15 +3605,17 @@ host_runtime_menu() {
             4) test_host_file_block ;;
             5) test_host_file_integrity_monitoring ;;
             6) test_host_forensics ;;
-            7) test_host_package_block ;;
-            8) test_host_port_scanning_detection ;;
-            9) test_host_secure_ai_discovery ;;
-            10) test_host_secure_ai_unauthorized_models ;;
-            11) configure_host_runtime ;;
-            12) test_host_windows_registry_monitoring ;;
-            13) test_host_windows_registry_protection ;;
-            14) cleanup_windows_registry_test ;;
-            *) print_colored_message yellow 'Choose an option from 0 to 14.' ;;
+            7) test_host_os_users_groups_allowed ;;
+            8) test_host_os_users_groups_blocked ;;
+            9) test_host_package_block ;;
+            10) test_host_port_scanning_detection ;;
+            11) test_host_secure_ai_discovery ;;
+            12) test_host_secure_ai_unauthorized_models ;;
+            13) configure_host_runtime ;;
+            14) test_host_windows_registry_monitoring ;;
+            15) test_host_windows_registry_protection ;;
+            16) cleanup_windows_registry_test ;;
+            *) print_colored_message yellow 'Choose an option from 0 to 16.' ;;
         esac
     done
 }
@@ -3563,16 +3665,18 @@ print_main_menu() {
     print_menu_option 35 "File Block" text
     print_menu_option 36 "File Integrity Monitoring" text
     print_menu_option 37 "Forensics" text
-    print_menu_option 38 "Package Block" text
-    print_menu_option 39 "Port Scanning Detection" text
-    print_menu_option 40 "Secure AI - Discovery" text
-    print_menu_option 41 "Secure AI - Unauthorized Models" text
-    print_menu_option 42 "Windows Registry Monitoring [Windows only]" text
-    print_menu_option 43 "Windows Registry Protection [Windows only]" text
+    print_menu_option 38 "OS Users and Groups Allowed [Linux/Windows]" text
+    print_menu_option 39 "OS Users and Groups Blocked [Linux/Windows]" text
+    print_menu_option 40 "Package Block" text
+    print_menu_option 41 "Port Scanning Detection" text
+    print_menu_option 42 "Secure AI - Discovery" text
+    print_menu_option 43 "Secure AI - Unauthorized Models" text
+    print_menu_option 44 "Windows Registry Monitoring [Windows only]" text
+    print_menu_option 45 "Windows Registry Protection [Windows only]" text
     echo
     print_colored_message blue "  SESSION"
-    print_menu_option 44 "Clean up Windows registry test" teal
-    print_menu_option 45 "Terminate Program" yellow
+    print_menu_option 46 "Clean up Windows registry test" teal
+    print_menu_option 47 "Terminate Program" yellow
     echo
 }
 
@@ -3616,7 +3720,7 @@ main() {
 
     while true; do
         print_main_menu
-        read -p "$(format_prompt "Enter your choice (1-45): ")" choice || { if [[ -n "${AQUA_PROBE_WINDOWS_RUN_ID:-}" ]]; then cleanup_windows_registry_test || return 1; fi; return 0; }
+        read -p "$(format_prompt "Enter your choice (1-47): ")" choice || { if [[ -n "${AQUA_PROBE_WINDOWS_RUN_ID:-}" ]]; then cleanup_windows_registry_test || return 1; fi; return 0; }
 
         case $choice in
             1)
@@ -3731,31 +3835,37 @@ main() {
                 test_host_forensics
                 ;;
             38)
-                test_host_package_block
+                test_host_os_users_groups_allowed
                 ;;
             39)
-                test_host_port_scanning_detection
+                test_host_os_users_groups_blocked
                 ;;
             40)
-                test_host_secure_ai_discovery
+                test_host_package_block
                 ;;
             41)
-                test_host_secure_ai_unauthorized_models
+                test_host_port_scanning_detection
                 ;;
             42)
-                test_host_windows_registry_monitoring
+                test_host_secure_ai_discovery
                 ;;
             43)
-                test_host_windows_registry_protection
+                test_host_secure_ai_unauthorized_models
                 ;;
             44)
-                cleanup_windows_registry_test
+                test_host_windows_registry_monitoring
                 ;;
             45)
+                test_host_windows_registry_protection
+                ;;
+            46)
+                cleanup_windows_registry_test
+                ;;
+            47)
                 terminate_program
                 ;;
             *)
-                print_colored_message yellow 'Choose an option from 1 to 45.'
+                print_colored_message yellow 'Choose an option from 1 to 47.'
                 ;;
         esac
 

@@ -76,11 +76,11 @@ done
 unset -f python3
 
 # Every host option dispatches, and standalone mode avoids cluster startup/cleanup.
-controls=(test_host_cryptocurrency_mining test_brute_force_login_detection test_host_dns_ip_reputation test_host_file_block test_host_file_integrity_monitoring test_host_forensics test_host_package_block test_host_port_scanning_detection test_host_secure_ai_discovery test_host_secure_ai_unauthorized_models)
+controls=(test_host_cryptocurrency_mining test_brute_force_login_detection test_host_dns_ip_reputation test_host_file_block test_host_file_integrity_monitoring test_host_forensics test_host_os_users_groups_allowed test_host_os_users_groups_blocked test_host_package_block test_host_port_scanning_detection test_host_secure_ai_discovery test_host_secure_ai_unauthorized_models)
 for control in "${controls[@]}"; do
     eval "$control() { printf 'DISPATCH $control\\n'; }"
 done
-result=$(host_runtime_menu <<< $'1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n0')
+result=$(host_runtime_menu <<< $'1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n0')
 for control in "${controls[@]}"; do
     [[ "$result" == *"DISPATCH $control"* ]] || fail "Missing $control dispatch"
 done
@@ -96,7 +96,7 @@ check_container_existence() { return 1; }
 sleep() { :; }
 configure_host_runtime() { printf 'DISPATCH configure_host_runtime\n'; }
 host_runtime_menu() { fail 'Main menu entered the old host submenu'; }
-result=$(main <<< $'2\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41')
+result=$(main <<< $'2\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43')
 for control in "${controls[@]}" configure_host_runtime; do
     [[ "$result" == *"DISPATCH $control"* ]] || fail "Missing direct $control dispatch"
 done

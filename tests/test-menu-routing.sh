@@ -51,6 +51,8 @@ expected=(
     test_host_file_block
     test_host_file_integrity_monitoring
     test_host_forensics
+    test_host_os_users_groups_allowed
+    test_host_os_users_groups_blocked
     test_host_package_block
     test_host_port_scanning_detection
     test_host_secure_ai_discovery
@@ -64,10 +66,10 @@ expected=(
 for fn in "${expected[@]}"; do
     eval "$fn() { printf 'ACTION $fn\\n'; }"
 done
-input=$(printf '%s\n' {1..45})
+input=$(printf '%s\n' {1..47})
 output=$(main <<< "$input")
 actual=$(printf '%s\n' "$output" | sed -n 's/^ACTION //p')
 wanted=$(printf '%s\n' "${expected[@]}")
 [[ "$actual" == "$wanted" ]] || fail 'Number-to-function mapping changed'
-[[ "${expected[44]}" == terminate_program ]] || fail 'Terminate must be last'
-printf 'PASS: all 45 menu actions route to their intended functions in order\n'
+[[ "${expected[46]}" == terminate_program ]] || fail 'Terminate must be last'
+printf 'PASS: all 47 menu actions route to their intended functions in order\n'
