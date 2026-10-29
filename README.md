@@ -52,8 +52,8 @@ Aqua Probe is an interactive command-line tool for validating Aqua runtime secur
 35. File Block
 36. File Integrity Monitoring
 37. Forensics
-38. OS Users and Groups Allowed [Linux/Windows]
-39. OS Users and Groups Blocked [Linux/Windows]
+38. OS Users and Groups Allowed
+39. OS Users and Groups Blocked
 40. Package Block
 41. Port Scanning Detection
 42. Secure AI - Discovery
@@ -152,8 +152,8 @@ For the shared Linux controls, select an authorized Linux lab host monitored by 
 | 35 | 4 | File Block | `cat /etc/passwd`; configure this path as blocked; prints account information if allowed |
 | 36 | 5 | File Integrity Monitoring | Create, modify, chmod, and delete disposable files under `/tmp/aqua-probe-host-fim-*` |
 | 37 | 6 | Forensics | `echo aqua-probe-forensics-marker`, `id`, and `ls /tmp`; review host process collection |
-| 38 | 7 | OS Users and Groups Allowed [Linux/Windows] | Valid baseline login, then test user/group allowlist matching over a new SSH connection |
-| 39 | 8 | OS Users and Groups Blocked [Linux/Windows] | Valid baseline login, then test user/group blocklist matching over a new SSH connection |
+| 38 | 7 | OS Users and Groups Allowed | Valid baseline login, then test user/group allowlist matching over a new SSH connection |
+| 39 | 8 | OS Users and Groups Blocked | Valid baseline login, then test user/group blocklist matching over a new SSH connection |
 | 40 | 9 | Package Block | `tar`; its ordinary missing-arguments error is not proof of enforcement |
 | 41 | 10 | Port Scanning Detection | Bash `/dev/tcp` probes on ports 1-1024 of an explicitly authorized destination; default `10.0.0.1`, maximum 16 concurrent one-second probes |
 | 42 | 11 | Secure AI - Discovery | One native Python 3 HTTPS request to OpenAI; review host AI Findings |

@@ -3585,8 +3585,8 @@ host_runtime_menu() {
         print_menu_option 4 'File Block'
         print_menu_option 5 'File Integrity Monitoring'
         print_menu_option 6 'Forensics'
-        print_menu_option 7 'OS Users and Groups Allowed [Linux/Windows]'
-        print_menu_option 8 'OS Users and Groups Blocked [Linux/Windows]'
+        print_menu_option 7 'OS Users and Groups Allowed'
+        print_menu_option 8 'OS Users and Groups Blocked'
         print_menu_option 9 'Package Block'
         print_menu_option 10 'Port Scanning Detection'
         print_menu_option 11 'Secure AI - Discovery'
@@ -3665,8 +3665,8 @@ print_main_menu() {
     print_menu_option 35 "File Block" text
     print_menu_option 36 "File Integrity Monitoring" text
     print_menu_option 37 "Forensics" text
-    print_menu_option 38 "OS Users and Groups Allowed [Linux/Windows]" text
-    print_menu_option 39 "OS Users and Groups Blocked [Linux/Windows]" text
+    print_menu_option 38 "OS Users and Groups Allowed" text
+    print_menu_option 39 "OS Users and Groups Blocked" text
     print_menu_option 40 "Package Block" text
     print_menu_option 41 "Port Scanning Detection" text
     print_menu_option 42 "Secure AI - Discovery" text
