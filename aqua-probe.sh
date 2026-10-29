@@ -1,26 +1,43 @@
 #!/bin/bash
 
 print_logo() {
-    echo -e "                                                                                          "
-    echo -e "                                                                                          "
-    echo -e "                                                                                          "
-    echo -e "         \033[0;33m.:-----\033[0m\033[0;31m=##*.\033[0m       .--=--.         :-==-:      ::.        :::     .:-==-.        "
-    echo -e "        \033[0;33m:-------\033[0m\033[0;31m=%%%:\033[0m     -#%%%%%%%#-     +%%%%%%%%*:   %%*        %%#   :#%%%%%%%#-      "
-    echo -e "      \033[0;36m:-\033[0m        \033[0;31m:%%%:\033[0m    *%%+:   :+%%*  .#%%=.  .-#%%-  %%*        %%#  +%%+:   :+%%*     "
-    echo -e "    \033[0;36m.---\033[0m        \033[0;31m:%%%:\033[0m   =%%=       =%%- *%%.       #%%  %%*        %%# -%%+       -%%=    "
-    echo -e "    \033[0;36m.---\033[0m        \033[0;31m:%%%:\033[0m   =%%-       -%%= *%%.       *%%  %%#       .%%* -%%=       .%%+    "
-    echo -e "    \033[0;36m.---\033[0m        \033[0;31m:%%%:\033[0m   =%%-       -%%= *%%.       *%%  %%#       .%%* -%%=       .%%+    "
-    echo -e "    \033[0;36m.---\033[0m        \033[0;31m:#+:\033[0m     #%%=.     -%%= .%%#-      *%%  =%%+.    :#%%.  #%%=.     .%%+    "
-    echo -e "    \033[0;34m:***++++++++-.\033[0m        =%%%%#####%%=  .+%%%##*: *%%   -*%%%##%%%+.    -#%%%#####%%+    "
-    echo -e "    \033[0;34m:#########+.\033[0m            .-=+++++++:     :==-   *%%     .-=++=:         .-=+++++++-    "
-    echo -e "                                                   *%%                                    "
-    echo -e "                                                   *%%                                    "
-    echo -e "                                                   *%%                                    "
-    echo "                                                                                          "
-    echo "                                                                                          "
-    echo "     Tool developed by Eric Gomes, Senior DevSecOps Architect @ Aqua Security                                       "
-    echo "                                                                                          "
-    echo "                                                                                          "
+    local line width
+    width=$(instruction_width)
+    echo
+    # ASCII silhouettes derived from aquasec-icon-dark.png and aquasec-logo-.ai.
+    if (( width >= 79 )); then
+        while IFS= read -r line; do
+            print_colored_message cyan "$line"
+        done <<'AQUA_LOGO'
+   ++######++       +####+   +####+  ##    ##  +####+  +######  +####+   +####+
+ +############+    +##++### +##++##+ ##    ## +##++##+ ##+++++ +##++##+ +##++#+
++####+    +####+   ##    ##+##    ##+##    ##+##    ## #####+  ########+##
+####+      +####   ##+   ##+##+   ##+##+   ## ##+   ##  +++### ######++ ##
+####+       ####   +####### +#### ## +######+ +####### +###### +##++#+  +#####+
++####+     +####     +#####   +##+##+  +##++    +##### +#####    +###+    +##++
+ +##############                  ##+
+   ++###########                  ##+
+AQUA_LOGO
+    else
+        while IFS= read -r line; do
+            print_colored_message cyan "$line"
+        done <<'AQUA_ICON'
+   ++######++
+ +############+
++####+    +####+
+####+      +####
+####+       ####
++####+     +####
+ +##############
+   ++###########
+AQUA_ICON
+        print_colored_message cyan "aquasec"
+    fi
+    echo
+    print_colored_message cyan "AQUA PROBE"
+    printf '%s\n' "Tool developed by Eric Gomes, Senior DevSecOps Architect @ Aqua Security" |
+        fold -s -w "$width"
+    echo
 }
 
 
