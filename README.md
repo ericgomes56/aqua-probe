@@ -4,7 +4,7 @@
 # Aqua Probe: The Aqua Security Runtime Input Validator Tool
 
 ## Overview
-Aqua Probe is an interactive command-line tool for validating Aqua runtime security controls in Kubernetes and on explicitly selected Linux hosts over SSH. Host tests use Host Runtime Policies and native host processes, not container policies or Kubernetes exec.
+Aqua Probe is an interactive command-line tool for validating Aqua runtime security controls in Kubernetes and on explicitly selected Linux or Windows hosts over SSH. Host tests use Host Runtime Policies and native host processes, not container policies or Kubernetes exec. Windows registry tests require Windows Aqua Enforcer.
 
 <img src="/misc/aqua-probe-demo.gif" height="500">
 
@@ -12,7 +12,7 @@ Aqua Probe is an interactive command-line tool for validating Aqua runtime secur
 
 ### Setup
 1. Deploy/Redeploy test container
-2. Select/change SSH host
+2. Select/change Linux SSH host
 
 ### Container & Workload Controls
 3. Bad DNS/IP Reputation
@@ -56,9 +56,12 @@ Aqua Probe is an interactive command-line tool for validating Aqua runtime secur
 39. Port Scanning Detection
 40. Secure AI - Discovery
 41. Secure AI - Unauthorized Models
+42. Windows Registry Monitoring [Windows only]
+43. Windows Registry Protection [Windows only]
 
 ### Session
-42. Terminate Program
+44. Clean up Windows registry test
+45. Terminate Program
 
 Controls are alphabetized within each scope. These numbers match the main menu; the `--host-runtime` interface retains its separate host-only numbering.
 
@@ -151,6 +154,8 @@ Select an authorized Linux lab host monitored by an Aqua Enforcer. Supply its SS
 | 39 | 8 | Port Scanning Detection | Bash `/dev/tcp` probes on ports 1-1024 of an explicitly authorized destination; default `10.0.0.1`, maximum 16 concurrent one-second probes |
 | 40 | 9 | Secure AI - Discovery | One native Python 3 HTTPS request to OpenAI; review host AI Findings |
 | 41 | 10 | Secure AI - Unauthorized Models | Same host request, with model matching the configured policy, e.g. `OpenAI@gpt-4` |
+| 42 | 12 | Windows Registry Monitoring [Windows only] | PowerShell registry create, read, modify, delete, and ACL attribute activity; audit only; Windows Aqua Enforcer required |
+| 43 | 13 | Windows Registry Protection [Windows only] | PowerShell create, modify, and delete attempts under a disposable protected path; Windows Aqua Enforcer required |
 
 Scope the corresponding **Host Runtime Policy** to the selected host and verify Enforcer coverage and feature availability. Shared commands can exercise the same signatures, but policy mode, network reputation, scan thresholds, host OS, and tenant support determine results. Failures from SSH, missing tools, network access, or permissions are not evidence of an Aqua block. Verify the matching host, policy, and timestamp in **Security Reports -> Audit**, or the relevant forensic/AI view.
 
@@ -158,7 +163,7 @@ Host FIM deliberately never modifies or deletes the real `/etc/sudoers`. Configu
 
 Secure AI requires native Python 3, HTTPS connectivity, model access, and supported host Secure AI coverage. The model is prompted (default `gpt-4` for consistency with the existing example); select an available Chat Completions model and match the policy. A retired/unavailable model or API billing/authentication error is not an Aqua detection. A request can incur provider charges. The key prompt is hidden, shell tracing is disabled for the request, and the key travels only through encrypted SSH stdin to the host process and HTTPS to OpenAI, never in command arguments, files, or environment variables. Each request asks for a fresh key. The API request follows the [OpenAI Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
 
-In `--host-runtime` mode, option **0** exits without running unrelated Kubernetes/Docker cleanup. The regular main menu runs host tests directly without a submenu. Run `bash tests/test-host-runtime.sh` for offline mocked tests; these do not contact a host or OpenAI.
+In `--host-runtime` mode, option **0** exits without running unrelated Kubernetes/Docker cleanup, but retries any pending Windows registry cleanup. Main option **44** (host-only option **14**) retries Windows registry cleanup explicitly. The regular main menu runs host tests directly without a submenu. Run `bash tests/test-host-runtime.sh` for offline mocked tests; these do not contact a host or OpenAI.
 
 ### Brute Force Login Detection
 
@@ -166,7 +171,31 @@ Brute Force remains directly accessible from main menu option **33** and host me
 
 The optional **SSH private key file path** prompt accepts a local key such as `~/.ssh/test.pem` (paths with spaces are supported; enter the path without surrounding quotes). Press Enter to retain password authentication. With a key, SSH uses public-key authentication and prompts for its passphrase if needed; Aqua Probe does not copy the key or store its passphrase. A valid authorized key succeeds and stops the test, so it does not generate brute-force failures. A key-based failure test requires rejected authentication attempts observed by the host and supported by the configured detection policy. A missing, unreadable, or invalid key does not prove detection.
 
-Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created; authentication and audit records remain for review. Menu option 42 terminates the program and runs the existing cleanup.
+Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created by brute-force testing; authentication and audit records remain for review. Menu option 45 terminates the program and runs cleanup, including pending Windows registry tests.
+
+### Windows Registry Monitoring and Protection
+
+**Windows only. Both controls require Windows Aqua Enforcer and a Host Runtime Policy covering the Windows host. Linux Aqua Enforcer cannot validate these signatures.** Windows targets have separate SSH settings from the Linux controls; each Windows test prompts for its hostname/IP, port, Windows username, and optional local private key (`.pem` paths supported). A Windows identity preflight verifies the OS/account SID, not Aqua installation or policy health. Confirm connected Windows Aqua Enforcer coverage in Aqua before running.
+
+Use an authorized Windows lab host with Windows PowerShell 5.1+ available as `powershell.exe`. Local Aqua Probe requires `ssh` and `python3`. An administrator must install/enable Windows OpenSSH Server and restrict SSH access to the authorized client, following [Microsoft's Windows OpenSSH setup guide](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse). A typical elevated PowerShell setup is:
+
+```powershell
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+```
+
+Configure the host firewall and SSH account/key permissions according to that guide. Verify `ssh -l 'DOMAIN\user' windows-host` works before testing. Aqua Probe does not install SSH, change the firewall, elevate privileges, disable host-key verification, or change execution policy. PowerShell scripts travel through encrypted SSH stdin; a short [EncodedCommand launcher](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1) avoids shell quoting and Windows command-line length problems. It does not conceal the scripts from host auditing.
+
+The workflow creates a unique, marked baseline at `HKCU:\Software\AquaProbeLab-<random-id>`, then prints the full policy path `HKEY_USERS\<SSH-account-SID>\Software\AquaProbeLab-<random-id>\Operations`. If your tenant expects a native registry path, its equivalent is `\REGISTRY\USER\<SID>\Software\AquaProbeLab-<random-id>\Operations`. Use your tenant's supported path/descendant matching format. The test never touches existing application or operating-system keys and never accepts an arbitrary registry path.
+
+For **Monitoring (42)**, enable **Create, Read, Modify, Delete, Attributes** under Windows Registry Monitoring, add the printed path and descendants to **Monitored Paths**, and save/sync the Host Runtime Policy. This control is **Audit only**; keep Protection off for the test path. Each operation runs separately over SSH: create a child key/value, read the baseline value, modify it, change ACL inheritance while preserving existing permissions, and delete a disposable baseline child key. The ACL change is an attributes candidate; verify its classification in Aqua rather than assuming all versions report the same signature. These operations use the [PowerShell Registry provider](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_registry_provider?view=powershell-7.6).
+
+For **Protection (43)**, create the baseline first while it is unprotected, then add the printed path and descendants to **Protected registry paths** in an enforcing Host Runtime Policy. Confirm policy sync before the create/modify/delete attempts. Review **Security Reports -> Audit**, filtered by Windows host, test time, policy, and registry path. An ACL denial, SSH failure, missing key, or successful PowerShell command alone does not prove Aqua behavior.
+
+After Protection testing, remove **only this test path** from protection and wait for policy sync before confirming cleanup. Cleanup verifies the current account SID, exact random key path, and ownership marker before removing that key. If blocked or unreachable, state is retained in the current session for retry with main option **44** / host-only **14**; new Windows tests and termination are refused until cleanup succeeds. After forced process termination or loss of session state, use the printed path to inspect and remove only the owned lab key manually, after removing its protection. Audit records remain for review. Aqua policies are never modified automatically.
+
+Run `bash tests/test-windows-registry.sh` for offline mocked workflow, transport, cleanup, and PowerShell syntax checks. Live Windows Aqua enforcement still requires validation on your Windows lab host.
 
 The following host-specific controls remain catalog items without dedicated host test functions in this update:
 
@@ -174,8 +203,6 @@ The following host-specific controls remain catalog items without dedicated host
 - OS Users and Groups Allowed
 - OS Users and Groups Blocked
 - System Integrity Monitoring
-- Windows Registry Monitoring
-- Windows Registry Protection
 
 ## Usage
 The banner, control headings, menu, prompts, and status messages share [Aqua's website palette](https://www.aquasec.com/): electric blue and teal on deep navy. Teal highlights prompts and review guidance, yellow marks prerequisites and warnings, and magenta marks errors. Titles are centered, menu entries and prerequisites wrap to the terminal width, and menu groups distinguish workload controls from host controls with sequential main-menu numbering. Commands and external tool output remain plain and copyable. True-color terminals use the exact brand colors; other color terminals use standard ANSI equivalents. Set `NO_COLOR=1` for plain-text output; redirected output and `TERM=dumb` also omit color codes.

@@ -21,11 +21,11 @@ for width in 30 40 60 79 80 100; do
     )
     [[ "$output" != *$'\033'* ]] || fail 'Unexpected ANSI escape'
     printf '%s\n' "$output" | awk -v w="$width" 'length > w {exit 1}' || fail "Overflow at $width columns"
-    for number in {1..42}; do
+    for number in {1..45}; do
         count=$(printf '%s\n' "$output" | grep -cE "^ +${number}\\. ")
         [[ "$count" == 1 ]] || fail "Menu option $number missing or duplicated"
     done
-    print_main_menu | awk '/^ +[0-9]+[.] / {n=$1; sub(/[.]$/, "", n); if (n != ++count) exit 1} END {if (count != 42) exit 1}' || fail 'Nonsequential menu'
+    print_main_menu | awk '/^ +[0-9]+[.] / {n=$1; sub(/[.]$/, "", n); if (n != ++count) exit 1} END {if (count != 45) exit 1}' || fail 'Nonsequential menu'
 done
 [[ "$(format_prompt 'Ready? ')" == '> Ready? ' ]] || fail 'Prompt text changed'
 [[ "$(print_colored_message red 'Failure details')" == 'Failure details' ]] || fail 'Redirected message changed'
@@ -40,4 +40,4 @@ COLORTERM=truecolor
 [[ "$(print_colored_message teal 'Redirected')" == 'Redirected' ]] || fail 'Redirected output has color'
 COLORTERM=
 [[ "$(theme_code yellow)" == '1;33;40' ]] || fail 'ANSI fallback mismatch'
-printf 'PASS: responsive layout, all 42 options, plain output, prompts, and palette fallbacks\n'
+printf 'PASS: responsive layout, all 45 options, plain output, prompts, and palette fallbacks\n'

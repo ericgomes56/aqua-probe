@@ -2894,6 +2894,7 @@ terminate_program() {
     read -p "$(format_prompt "Are you sure you want to terminate the program? (y/n): ")" terminate_choice
     case $terminate_choice in
         [Yy]*)
+            cleanup_windows_registry_test || return 1
             cleanup_aqua_probe_artifacts
             unset AQUA_PROBE_SKIP_INSTRUCTIONS # Unset env var for skip instructions flag
             unset AQUA_PROBE_IMAGE # Unset env var for image flag
@@ -3307,13 +3308,179 @@ HOST_AI
     )
 }
 
+windows_powershell() {
+    local bootstrap encoded
+    # Only this small launcher goes on the command line (Windows cmd.exe has a length limit).
+    bootstrap='$ErrorActionPreference="Stop"; try { & ([scriptblock]::Create([Console]::In.ReadToEnd())) } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }'
+    encoded=$(printf '%s' "$bootstrap" | python3 -c 'import sys, base64; print(base64.b64encode(sys.stdin.read().encode("utf-16le")).decode())') || return 1
+    printf '%s\n' "$1" | ssh -T -p "$AQUA_PROBE_WINDOWS_PORT" -l "$AQUA_PROBE_WINDOWS_USER" \
+        "${AQUA_PROBE_WINDOWS_AUTH[@]}" -o ConnectTimeout=10 -o ConnectionAttempts=1 \
+        -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+        "$AQUA_PROBE_WINDOWS_HOST" "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand $encoded"
+}
+
+configure_windows_registry_host() {
+    local host user port key sid user_pattern='^[a-zA-Z0-9_][a-zA-Z0-9_.@\\-]*$'
+    [[ -z "${AQUA_PROBE_WINDOWS_RUN_ID:-}" ]] || { print_colored_message red 'Clean up the pending Windows registry test before changing hosts.'; return 1; }
+    command -v ssh >/dev/null && command -v python3 >/dev/null || { print_colored_message red 'Local OpenSSH and Python 3 are required.'; return 1; }
+    print_instructions 'WINDOWS ONLY. Requires Windows Aqua Enforcer monitoring this Windows host and a Host Runtime Policy.
+Enable Windows OpenSSH Server and allow SSH only from your authorized test client. Windows PowerShell 5.1+ must be available as powershell.exe.
+Use a dedicated Windows account with access to its own registry hive. No elevation, execution-policy bypass, or Linux commands are used.'
+    read -r -p "$(format_prompt 'Windows SSH hostname/IP: ')" host || return 1
+    [[ "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]] || { print_colored_message red 'Invalid host.'; return 1; }
+    read -r -p "$(format_prompt 'Windows SSH user (user, DOMAIN\user, or user@domain): ')" user || return 1
+    [[ "$user" =~ $user_pattern ]] || { print_colored_message red 'Invalid Windows username.'; return 1; }
+    read -r -p "$(format_prompt 'SSH port [22]: ')" port || return 1
+    port=${port:-22}
+    [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 )) || { print_colored_message red 'Invalid port.'; return 1; }
+    read -r -p "$(format_prompt 'SSH key file (.pem; Enter for SSH default authentication): ')" key || return 1
+    case "$key" in '~/'*) key="$HOME/${key#\~/}" ;; esac
+    AQUA_PROBE_WINDOWS_AUTH=()
+    if [[ -n "$key" ]]; then
+        [[ -f "$key" && -r "$key" ]] || { print_colored_message red 'Key must exist and be readable.'; return 1; }
+        AQUA_PROBE_WINDOWS_AUTH=(-i "$key" -o IdentitiesOnly=yes)
+    fi
+    AQUA_PROBE_WINDOWS_HOST=$host AQUA_PROBE_WINDOWS_USER=$user AQUA_PROBE_WINDOWS_PORT=$port
+    sid=$(windows_powershell 'if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw "Windows is required" }; [Security.Principal.WindowsIdentity]::GetCurrent().User.Value') || return 1
+    sid=${sid//$'\r'/}
+    [[ "$sid" =~ ^S-1-[0-9-]+$ ]] || { print_colored_message red 'Windows identity preflight failed.'; return 1; }
+    AQUA_PROBE_WINDOWS_SID=$sid
+    print_colored_message teal "Windows SSH verified: $user@$host ($sid)"
+    print_colored_message yellow 'This verifies Windows access, not Windows Aqua Enforcer health. Confirm Enforcer coverage in Aqua before proceeding.'
+}
+
+windows_registry_script() {
+    local phase="$1"
+    case "$phase" in prepare|create|read|modify|attributes|delete|cleanup) ;; *) return 1 ;; esac
+    [[ "${AQUA_PROBE_WINDOWS_RUN_ID:-}" =~ ^[a-f0-9]{32}$ && "${AQUA_PROBE_WINDOWS_SID:-}" =~ ^S-1-[0-9-]+$ ]] || return 1
+    printf "\$phase = '%s'\n\$runId = '%s'\n\$expectedSid = '%s'\n" "$phase" "$AQUA_PROBE_WINDOWS_RUN_ID" "$AQUA_PROBE_WINDOWS_SID"
+    cat <<'WINDOWS_REGISTRY'
+$ErrorActionPreference = 'Stop'
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Windows only' }
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+if ($sid -ne $expectedSid) { throw 'SSH account SID changed; refusing registry operations' }
+$root = "HKCU:\Software\AquaProbeLab-$runId"
+$ops = "$root\Operations"
+if ($phase -eq 'prepare') {
+    if (Test-Path -LiteralPath $root) { throw 'Test path already exists; refusing to overwrite' }
+    New-Item -Path $root | Out-Null
+    New-ItemProperty -LiteralPath $root -Name AquaProbeRunId -Value $runId -PropertyType String | Out-Null
+    New-Item -Path $ops | Out-Null
+    New-ItemProperty -LiteralPath $ops -Name ProbeValue -Value 'baseline' -PropertyType String | Out-Null
+    New-Item -Path "$ops\DeleteMe" | Out-Null
+    Write-Output "PREPARED: $root"
+    exit 0
+}
+if (-not (Test-Path -LiteralPath $root)) {
+    if ($phase -eq 'cleanup') { Write-Output 'CLEAN: test key absent'; exit 0 }
+    throw 'Test key absent; prepare a new test'
+}
+$marker = (Get-ItemProperty -LiteralPath $root -Name AquaProbeRunId).AquaProbeRunId
+if ($marker -ne $runId) { throw 'Ownership marker mismatch; refusing to modify or remove this key' }
+switch ($phase) {
+    'create' {
+        New-Item -Path "$ops\Created" | Out-Null
+        New-ItemProperty -LiteralPath "$ops\Created" -Name ProbeValue -Value 'created' -PropertyType String | Out-Null
+    }
+    'read' { Get-ItemProperty -LiteralPath $ops -Name ProbeValue | Select-Object ProbeValue }
+    'modify' { Set-ItemProperty -LiteralPath $ops -Name ProbeValue -Value 'modified' }
+    'attributes' {
+        $acl = Get-Acl -LiteralPath $ops
+        # Change inheritance on the disposable key only; preserve inherited permissions.
+        $acl.SetAccessRuleProtection($true, $true)
+        Set-Acl -LiteralPath $ops -AclObject $acl
+    }
+    'delete' { Remove-Item -LiteralPath "$ops\DeleteMe" }
+    'cleanup' {
+        # Exact unique root plus matching marker; never delete Software or unrelated keys.
+        Remove-Item -LiteralPath $root -Recurse
+        if (Test-Path -LiteralPath $root) { throw 'Cleanup incomplete' }
+    }
+}
+Write-Output "COMPLETED: $phase"
+WINDOWS_REGISTRY
+}
+
+cleanup_windows_registry_test() {
+    [[ -n "${AQUA_PROBE_WINDOWS_RUN_ID:-}" ]] || return 0
+    local script
+    print_colored_message blue 'Cleaning up the owned Windows registry test key...'
+    script=$(windows_registry_script cleanup) || return 1
+    if windows_powershell "$script"; then
+        unset AQUA_PROBE_WINDOWS_RUN_ID
+        print_colored_message teal 'Windows registry test cleanup completed.'
+    else
+        print_colored_message red 'Cleanup failed. Remove ONLY the test path from Windows Registry Protection, restore SSH access if needed, and retry cleanup.'
+        print_colored_message yellow "Pending key: HKEY_USERS\\$AQUA_PROBE_WINDOWS_SID\Software\AquaProbeLab-$AQUA_PROBE_WINDOWS_RUN_ID"
+        return 1
+    fi
+}
+
+test_windows_registry_control() {
+    local mode="$1" proceed script phase path status
+    print_test_header "Windows Registry $mode" 'Windows only | Windows Aqua Enforcer | Host Runtime Policy'
+    cleanup_windows_registry_test || return 1
+    configure_windows_registry_host || return 1
+    print_instructions 'Use an authorized Windows lab host. Confirm Windows Aqua Enforcer is connected and the Host Runtime Policy applies to this host.
+First create a unique baseline key in the SSH account registry hive while the disposable path is NOT protected. No existing OS/application registry keys are modified.
+This test requires confirmation even with --no-instructions. Keep other controls from blocking PowerShell or SSH and masking the result.'
+    read -r -p "$(format_prompt 'Create the disposable Windows registry baseline? Type yes: ')" proceed || return 1
+    [[ "$proceed" == yes ]] || return 0
+    AQUA_PROBE_WINDOWS_RUN_ID=$(python3 -c 'import uuid; print(uuid.uuid4().hex)') || return 1
+    path="HKEY_USERS\\$AQUA_PROBE_WINDOWS_SID\Software\AquaProbeLab-$AQUA_PROBE_WINDOWS_RUN_ID\Operations"
+    print_colored_message blue "Policy path: $path"
+    script=$(windows_registry_script prepare) || return 1
+    if ! windows_powershell "$script"; then
+        print_colored_message red 'Baseline preparation failed. No signature tests will run; attempting cleanup.'
+        cleanup_windows_registry_test
+        return 1
+    fi
+    if [[ "$mode" == Monitoring ]]; then
+        print_instructions "WINDOWS ONLY / AUDIT ONLY: In Windows Registry Monitoring select Create, Read, Modify, Delete, and Attributes.
+Add this path to Monitored Paths, including its descendants using the matching syntax supported by your tenant: $path
+Save the Host Runtime Policy and allow it to reach Windows Aqua Enforcer. Keep Windows Registry Protection off for this test path.
+Attributes is exercised by changing ACL inheritance on the disposable Operations key while preserving permissions. Verify Aqua classifies the event as expected; a command exit code alone cannot prove collection."
+    else
+        print_instructions "WINDOWS ONLY: In Windows Registry Protection add this path to Protected registry paths, including descendants using your tenant's supported matching syntax: $path
+Save the enforcing Host Runtime Policy and allow it to reach Windows Aqua Enforcer.
+The test attempts create, modify, and delete operations. Expect denied operations only when the effective policy protects this path. Windows ACL errors are not proof of Aqua enforcement.
+After testing, remove ONLY this disposable path from protection so cleanup can succeed. The script never changes Aqua policy automatically."
+    fi
+    read -r -p "$(format_prompt 'Policy applied to this Windows host and test path? Type yes: ')" proceed || proceed=no
+    if [[ "$proceed" == yes ]]; then
+        for phase in create read modify attributes delete; do
+            if [[ "$mode" == Protection && ( "$phase" == read || "$phase" == attributes ) ]]; then continue; fi
+            print_colored_message blue "Windows registry operation: $phase"
+            script=$(windows_registry_script "$phase") || return 1
+            status=0
+            windows_powershell "$script" || status=$?
+            print_colored_message text "Operation $phase exit status: $status"
+        done
+        print_audit_review
+        print_colored_message text "Filter by Windows host $AQUA_PROBE_WINDOWS_HOST, policy, registry path, and test time. Confirm the Windows Aqua Enforcer generated the matching event."
+        print_colored_message yellow 'Monitoring collects events; Protection should deny configured operations. Neither success nor failure alone proves Aqua behavior.'
+    fi
+    if [[ "$mode" == Protection ]]; then
+        print_colored_message yellow "Remove ONLY this test path from protection and wait for policy sync: $path"
+        read -r -p "$(format_prompt 'Test path unprotected and ready for cleanup? Type yes: ')" proceed || proceed=no
+        if [[ "$proceed" != yes ]]; then
+            print_colored_message yellow 'Test key retained for cleanup retry. Use Clean up Windows registry test before termination.'
+            return 1
+        fi
+    fi
+    cleanup_windows_registry_test
+}
+
+test_host_windows_registry_monitoring() { test_windows_registry_control Monitoring; }
+test_host_windows_registry_protection() { test_windows_registry_control Protection; }
+
 test_host_secure_ai_discovery() { test_host_secure_ai Discovery; }
 test_host_secure_ai_unauthorized_models() { test_host_secure_ai 'Unauthorized Models'; }
 
 host_runtime_menu() {
     local choice
     while true; do
-        print_test_header 'Host Runtime Controls' 'Direct SSH | Linux host | No Kubernetes checks'
+        print_test_header 'Host Runtime Controls' 'Direct SSH | Linux & Windows | No Kubernetes checks'
         print_menu_option 1 'Block Cryptocurrency Mining'
         print_menu_option 2 'Brute Force Login Detection'
         print_menu_option 3 'DNS/IP Reputation'
@@ -3324,11 +3491,14 @@ host_runtime_menu() {
         print_menu_option 8 'Port Scanning Detection'
         print_menu_option 9 'Secure AI - Discovery'
         print_menu_option 10 'Secure AI - Unauthorized Models'
-        print_menu_option 11 'Select/change SSH host' teal
+        print_menu_option 11 'Select/change Linux SSH host' teal
+        print_menu_option 12 'Windows Registry Monitoring [Windows only]'
+        print_menu_option 13 'Windows Registry Protection [Windows only]'
+        print_menu_option 14 'Clean up Windows registry test' yellow
         print_menu_option 0 'Leave Host Runtime menu (exit in --host-runtime mode)' yellow
-        read -r -p "$(format_prompt 'Select a host control (0-11): ')" choice || return 0
+        read -r -p "$(format_prompt 'Select a host control (0-14): ')" choice || { cleanup_windows_registry_test; return $?; }
         case "$choice" in
-            0) return 0 ;;
+            0) if cleanup_windows_registry_test; then return 0; fi ;;
             1) test_host_cryptocurrency_mining ;;
             2) test_brute_force_login_detection ;;
             3) test_host_dns_ip_reputation ;;
@@ -3340,7 +3510,10 @@ host_runtime_menu() {
             9) test_host_secure_ai_discovery ;;
             10) test_host_secure_ai_unauthorized_models ;;
             11) configure_host_runtime ;;
-            *) print_colored_message yellow 'Choose an option from 0 to 11.' ;;
+            12) test_host_windows_registry_monitoring ;;
+            13) test_host_windows_registry_protection ;;
+            14) cleanup_windows_registry_test ;;
+            *) print_colored_message yellow 'Choose an option from 0 to 14.' ;;
         esac
     done
 }
@@ -3350,7 +3523,7 @@ print_main_menu() {
     echo
     print_colored_message blue "  SETUP"
     print_menu_option 1 "Deploy/Redeploy test container" teal
-    print_menu_option 2 "Select/change SSH host" teal
+    print_menu_option 2 "Select/change Linux SSH host" teal
     echo
     print_colored_message blue "  CONTAINER & WORKLOAD"
     print_menu_option 3 "Bad DNS/IP Reputation" text
@@ -3394,9 +3567,12 @@ print_main_menu() {
     print_menu_option 39 "Port Scanning Detection" text
     print_menu_option 40 "Secure AI - Discovery" text
     print_menu_option 41 "Secure AI - Unauthorized Models" text
+    print_menu_option 42 "Windows Registry Monitoring [Windows only]" text
+    print_menu_option 43 "Windows Registry Protection [Windows only]" text
     echo
     print_colored_message blue "  SESSION"
-    print_menu_option 42 "Terminate Program" yellow
+    print_menu_option 44 "Clean up Windows registry test" teal
+    print_menu_option 45 "Terminate Program" yellow
     echo
 }
 
@@ -3440,7 +3616,7 @@ main() {
 
     while true; do
         print_main_menu
-        read -p "$(format_prompt "Enter your choice (1-42): ")" choice || return 0
+        read -p "$(format_prompt "Enter your choice (1-45): ")" choice || { if [[ -n "${AQUA_PROBE_WINDOWS_RUN_ID:-}" ]]; then cleanup_windows_registry_test || return 1; fi; return 0; }
 
         case $choice in
             1)
@@ -3567,10 +3743,19 @@ main() {
                 test_host_secure_ai_unauthorized_models
                 ;;
             42)
+                test_host_windows_registry_monitoring
+                ;;
+            43)
+                test_host_windows_registry_protection
+                ;;
+            44)
+                cleanup_windows_registry_test
+                ;;
+            45)
                 terminate_program
                 ;;
             *)
-                print_colored_message yellow 'Choose an option from 1 to 42.'
+                print_colored_message yellow 'Choose an option from 1 to 45.'
                 ;;
         esac
 

@@ -55,16 +55,19 @@ expected=(
     test_host_port_scanning_detection
     test_host_secure_ai_discovery
     test_host_secure_ai_unauthorized_models
+    test_host_windows_registry_monitoring
+    test_host_windows_registry_protection
+    cleanup_windows_registry_test
     terminate_program
 )
 # Replace actions only, preserving the real main-menu dispatch logic.
 for fn in "${expected[@]}"; do
     eval "$fn() { printf 'ACTION $fn\\n'; }"
 done
-input=$(printf '%s\n' {1..42})
+input=$(printf '%s\n' {1..45})
 output=$(main <<< "$input")
 actual=$(printf '%s\n' "$output" | sed -n 's/^ACTION //p')
 wanted=$(printf '%s\n' "${expected[@]}")
 [[ "$actual" == "$wanted" ]] || fail 'Number-to-function mapping changed'
-[[ "${expected[41]}" == terminate_program ]] || fail 'Terminate must be last'
-printf 'PASS: all 42 menu actions route to their intended functions in order\n'
+[[ "${expected[44]}" == terminate_program ]] || fail 'Terminate must be last'
+printf 'PASS: all 45 menu actions route to their intended functions in order\n'
