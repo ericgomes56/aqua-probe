@@ -3061,7 +3061,7 @@ test_registries_allowed() {
 
 test_brute_force_login_detection() {
     print_test_header "Brute Force Login Detection" "Host Runtime Policy"
-    local host login_user port attempts proceed attempt status key_file
+    local host login_user port attempts proceed attempt status key_file default_host='' default_port=22
     local -a auth_options
 
     print_instructions "Apply a Host Runtime Policy with Brute Force Login Detection enabled to the target Linux host.
@@ -3071,7 +3071,11 @@ Enter an intentionally incorrect password at each SSH password prompt; no passwo
 Choose an attempt count that meets your configured detection threshold/window (maximum 10 per run).
 This test connects directly to host SSH; it does not deploy or exec into a container."
     command -v ssh >/dev/null 2>&1 || { echo "OpenSSH client is required."; return 1; }
-    read -r -p "$(format_prompt "Monitored host IP or hostname: ")" host || return
+    if [[ "${AQUA_PROBE_HOST_READY:-0}" == 1 ]]; then
+        default_host=$AQUA_PROBE_HOST default_port=$AQUA_PROBE_HOST_PORT
+    fi
+    read -r -p "$(format_prompt "Monitored Linux host IP or hostname [${default_host:-required}]: ")" host || return
+    host=${host:-$default_host}
     if [[ ! "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]]; then
         print_colored_message text "Invalid hostname or IP address."; return 1
     fi
@@ -3079,8 +3083,8 @@ This test connects directly to host SSH; it does not deploy or exec into a conta
     if [[ ! "$login_user" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
         print_colored_message text "Invalid username."; return 1
     fi
-    read -r -p "$(format_prompt "SSH port [22]: ")" port || return
-    port=${port:-22}
+    read -r -p "$(format_prompt "SSH port [$default_port]: ")" port || return
+    port=${port:-$default_port}
     if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
         print_colored_message text "Invalid SSH port."; return 1
     fi
@@ -3138,6 +3142,19 @@ host_ssh() {
         "${AQUA_PROBE_HOST_AUTH[@]}" -o ConnectTimeout=10 -o ConnectionAttempts=1 \
         -o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
         -o ControlMaster=no -o ControlPath=none "$AQUA_PROBE_HOST" "bash -c '$quoted'"
+}
+
+select_ssh_host() {
+    local platform
+    print_test_header 'Select/change SSH host' 'Saved separately for Linux and Windows controls'
+    read -r -p "$(format_prompt 'Host OS (linux/windows): ')" platform || return 1
+    case "$platform" in
+        linux) configure_host_runtime || return 1 ;;
+        windows) configure_windows_registry_host || return 1 ;;
+        *) print_colored_message red 'Choose linux or windows.'; return 1 ;;
+    esac
+    AQUA_PROBE_SELECTED_HOST_OS=$platform
+    print_colored_message teal "Saved $platform SSH connection. Matching controls will reuse it."
 }
 
 configure_host_runtime() {
@@ -3322,6 +3339,7 @@ windows_powershell() {
 configure_windows_registry_host() {
     local host user port key sid user_pattern='^[a-zA-Z0-9_][a-zA-Z0-9_.@\\-]*$'
     [[ -z "${AQUA_PROBE_WINDOWS_RUN_ID:-}" ]] || { print_colored_message red 'Clean up the pending Windows registry test before changing hosts.'; return 1; }
+    AQUA_PROBE_WINDOWS_READY=0
     command -v ssh >/dev/null && command -v python3 >/dev/null || { print_colored_message red 'Local OpenSSH and Python 3 are required.'; return 1; }
     print_instructions 'WINDOWS ONLY. Requires Windows Aqua Enforcer monitoring this Windows host and a Host Runtime Policy.
 Enable Windows OpenSSH Server and allow SSH only from your authorized test client. Windows PowerShell 5.1+ must be available as powershell.exe.
@@ -3345,6 +3363,7 @@ Use a dedicated Windows account with access to its own registry hive. No elevati
     sid=${sid//$'\r'/}
     [[ "$sid" =~ ^S-1-[0-9-]+$ ]] || { print_colored_message red 'Windows identity preflight failed.'; return 1; }
     AQUA_PROBE_WINDOWS_SID=$sid
+    AQUA_PROBE_WINDOWS_READY=1
     print_colored_message teal "Windows SSH verified: $user@$host ($sid)"
     print_colored_message yellow 'This verifies Windows access, not Windows Aqua Enforcer health. Confirm Enforcer coverage in Aqua before proceeding.'
 }
@@ -3420,7 +3439,8 @@ test_windows_registry_control() {
     local mode="$1" proceed script phase path status
     print_test_header "Windows Registry $mode" 'Windows only | Windows Aqua Enforcer | Host Runtime Policy'
     cleanup_windows_registry_test || return 1
-    configure_windows_registry_host || return 1
+    [[ "${AQUA_PROBE_WINDOWS_READY:-0}" == 1 ]] || configure_windows_registry_host || return 1
+    print_colored_message blue "Windows target: $AQUA_PROBE_WINDOWS_USER@$AQUA_PROBE_WINDOWS_HOST:$AQUA_PROBE_WINDOWS_PORT"
     print_instructions 'Use an authorized Windows lab host. Confirm Windows Aqua Enforcer is connected and the Host Runtime Policy applies to this host.
 First create a unique baseline key in the SSH account registry hive while the disposable path is NOT protected. No existing OS/application registry keys are modified.
 This test requires confirmation even with --no-instructions. Keep other controls from blocking PowerShell or SSH and masking the result.'
@@ -3493,7 +3513,7 @@ host_os_identity_probe() {
 }
 
 test_host_os_users_groups() {
-    local mode="$1" platform host user port key subject group expected proceed status
+    local mode="$1" platform host user port key subject group expected proceed status default_host default_port
     local user_pattern='^[a-zA-Z0-9_][a-zA-Z0-9_.@\\-]*$'
     print_test_header "OS Users and Groups $mode" 'Host Runtime Policy | Linux or Windows'
     print_instructions 'Use an authorized lab host with the matching Linux or Windows Aqua Enforcer connected.
@@ -3501,14 +3521,22 @@ Use an existing dedicated account with VALID credentials. This is not a brute-fo
 Keep a separate administrator recovery session AND out-of-band console access. An allowlist can lock out every unlisted administrator; preserve recovery users/groups explicitly.
 Check OS/account lockout rules. Do not modify production access policies. The script creates no accounts/groups and never changes Aqua policies automatically.'
     command -v ssh >/dev/null || { print_colored_message red 'OpenSSH is required.'; return 1; }
-    read -r -p "$(format_prompt 'Host OS (linux/windows): ')" platform || return 1
+    read -r -p "$(format_prompt "Host OS (linux/windows) [${AQUA_PROBE_SELECTED_HOST_OS:-choose one}]: ")" platform || return 1
+    platform=${platform:-${AQUA_PROBE_SELECTED_HOST_OS:-}}
     [[ "$platform" == linux || "$platform" == windows ]] || { print_colored_message red 'Choose linux or windows.'; return 1; }
-    read -r -p "$(format_prompt 'Monitored SSH hostname/IP: ')" host || return 1
+    default_host='' default_port=22
+    if [[ "$platform" == linux && "${AQUA_PROBE_HOST_READY:-0}" == 1 ]]; then
+        default_host=$AQUA_PROBE_HOST default_port=$AQUA_PROBE_HOST_PORT
+    elif [[ "$platform" == windows && "${AQUA_PROBE_WINDOWS_READY:-0}" == 1 ]]; then
+        default_host=$AQUA_PROBE_WINDOWS_HOST default_port=$AQUA_PROBE_WINDOWS_PORT
+    fi
+    read -r -p "$(format_prompt "Monitored SSH hostname/IP [${default_host:-required}]: ")" host || return 1
+    host=${host:-$default_host}
     [[ "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]] || { print_colored_message red 'Invalid host.'; return 1; }
     read -r -p "$(format_prompt 'Dedicated test username (Windows may use DOMAIN\user): ')" user || return 1
     [[ "$user" =~ $user_pattern ]] || { print_colored_message red 'Invalid username.'; return 1; }
-    read -r -p "$(format_prompt 'SSH port [22]: ')" port || return 1
-    port=${port:-22}
+    read -r -p "$(format_prompt "SSH port [$default_port]: ")" port || return 1
+    port=${port:-$default_port}
     [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 )) || { print_colored_message red 'Invalid port.'; return 1; }
     read -r -p "$(format_prompt 'SSH key file (.pem; Enter for SSH default authentication): ')" key || return 1
     case "$key" in '~/'*) key="$HOME/${key#\~/}" ;; esac
@@ -3591,7 +3619,7 @@ host_runtime_menu() {
         print_menu_option 10 'Port Scanning Detection'
         print_menu_option 11 'Secure AI - Discovery'
         print_menu_option 12 'Secure AI - Unauthorized Models'
-        print_menu_option 13 'Select/change Linux SSH host' teal
+        print_menu_option 13 'Select/change SSH host' teal
         print_menu_option 14 'Windows Registry Monitoring [Windows only]'
         print_menu_option 15 'Windows Registry Protection [Windows only]'
         print_menu_option 16 'Clean up Windows registry test' yellow
@@ -3611,7 +3639,7 @@ host_runtime_menu() {
             10) test_host_port_scanning_detection ;;
             11) test_host_secure_ai_discovery ;;
             12) test_host_secure_ai_unauthorized_models ;;
-            13) configure_host_runtime ;;
+            13) select_ssh_host ;;
             14) test_host_windows_registry_monitoring ;;
             15) test_host_windows_registry_protection ;;
             16) cleanup_windows_registry_test ;;
@@ -3625,7 +3653,7 @@ print_main_menu() {
     echo
     print_colored_message blue "  SETUP"
     print_menu_option 1 "Deploy/Redeploy test container" teal
-    print_menu_option 2 "Select/change Linux SSH host" teal
+    print_menu_option 2 "Select/change SSH host" teal
     echo
     print_colored_message blue "  CONTAINER & WORKLOAD"
     print_menu_option 3 "Bad DNS/IP Reputation" text
@@ -3727,7 +3755,7 @@ main() {
                 deploy_test_container
                 ;;
             2)
-                configure_host_runtime
+                select_ssh_host
                 ;;
             3)
                 test_bad_dns_ip_reputation

@@ -94,10 +94,10 @@ check_aqua_agent_daemonset() { :; }
 check_aqua_kube_enforcer_deployment() { :; }
 check_container_existence() { return 1; }
 sleep() { :; }
-configure_host_runtime() { printf 'DISPATCH configure_host_runtime\n'; }
+select_ssh_host() { printf 'DISPATCH select_ssh_host\n'; }
 host_runtime_menu() { fail 'Main menu entered the old host submenu'; }
 result=$(main <<< $'2\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43')
-for control in "${controls[@]}" configure_host_runtime; do
+for control in "${controls[@]}" select_ssh_host; do
     [[ "$result" == *"DISPATCH $control"* ]] || fail "Missing direct $control dispatch"
 done
 printf 'PASS: SSH quoting, validation, confirmation, nine shared controls, FIM cleanup, secret transport, direct menu and standalone mode\n'

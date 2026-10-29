@@ -15,7 +15,7 @@ sleep() { :; }
 print_main_menu() { :; }
 expected=(
     deploy_test_container
-    configure_host_runtime
+    select_ssh_host
     test_bad_dns_ip_reputation
     test_block_container_exec
     test_block_cryptocurrency_mining

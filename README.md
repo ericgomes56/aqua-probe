@@ -12,7 +12,7 @@ Aqua Probe is an interactive command-line tool for validating Aqua runtime secur
 
 ### Setup
 1. Deploy/Redeploy test container
-2. Select/change Linux SSH host
+2. Select/change SSH host
 
 ### Container & Workload Controls
 3. Bad DNS/IP Reputation
@@ -142,7 +142,9 @@ Choose a test directly under **HOST RUNTIME CONTROLS** in the main menu, or laun
 ./aqua-probe.sh --host-runtime
 ```
 
-For the shared Linux controls, select an authorized Linux lab host monitored by an Aqua Enforcer. Supply its SSH hostname/IP, port, username, and optional local `.pem`/private key path. The selected connection is reused within the session; main option **2** (host-only option **13**) changes it. Commands execute as that user without automatic sudo or package installation. Bash is required for these Linux controls. Authentication-policy and Windows registry tests prompt for their own target independently. SSH host-key verification remains enabled. Each test requires explicit confirmation, even with `--no-instructions`.
+Use **Select/change SSH host**, main option **2** (host-only option **13**), to choose **linux** or **windows**, then supply the host, username, port, and optional local `.pem`/private key path. Linux and Windows connections are saved separately for the current session and verified using the appropriate OS preflight. Linux controls reuse the Linux connection; Windows registry controls reuse the Windows connection. If the required OS has no configured connection, that control prompts for it. Selecting Windows never sends Linux Bash commands to that host, and selecting Linux does not overwrite a pending Windows cleanup target.
+
+Linux controls require Bash; Windows registry controls require Windows PowerShell and Windows Aqua Enforcer. No automatic sudo, elevation, or package installation is added. Authentication-policy tests offer the selected OS and matching saved hostname/port as defaults, but still require a dedicated test username and credentials rather than silently using the saved administrator identity. Brute-force testing similarly offers the saved Linux host/port while keeping its dedicated account prompts. SSH host-key verification remains enabled, and every test requires confirmation even with `--no-instructions`. Run `bash tests/test-ssh-selector.sh` for offline selector/reuse checks.
 
 | Main menu | Host-only menu | Control | Host validation |
 | --- | --- | --- | --- |
@@ -198,7 +200,7 @@ Run `bash tests/test-host-os-users-groups.sh` for offline Linux/Windows, user/gr
 
 ### Windows Registry Monitoring and Protection
 
-**Windows only. Both controls require Windows Aqua Enforcer and a Host Runtime Policy covering the Windows host. Linux Aqua Enforcer cannot validate these signatures.** Windows targets have separate SSH settings from the Linux controls; each Windows test prompts for its hostname/IP, port, Windows username, and optional local private key (`.pem` paths supported). A Windows identity preflight verifies the OS/account SID, not Aqua installation or policy health. Confirm connected Windows Aqua Enforcer coverage in Aqua before running.
+**Windows only. Both controls require Windows Aqua Enforcer and a Host Runtime Policy covering the Windows host. Linux Aqua Enforcer cannot validate these signatures.** Windows tests reuse the Windows connection saved through **Select/change SSH host**, or prompt for it on first use (`.pem` paths supported). A Windows identity preflight verifies the OS/account SID, not Aqua installation or policy health. The generated registry scripts also recheck the SID before operations. Changing the Windows target is refused while registry cleanup is pending. Confirm connected Windows Aqua Enforcer coverage in Aqua before running.
 
 Use an authorized Windows lab host with Windows PowerShell 5.1+ available as `powershell.exe`. Local Aqua Probe requires `ssh` and `python3`. An administrator must install/enable Windows OpenSSH Server and restrict SSH access to the authorized client, following [Microsoft's Windows OpenSSH setup guide](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse). A typical elevated PowerShell setup is:
 
