@@ -4,7 +4,7 @@
 # Aqua Probe: The Aqua Security Runtime Input Validator Tool
 
 ## Overview
-Aqua Probe is an interactive command-line tool designed to explore runtime security features provided by Aqua Security within Kubernetes environments. It allows users to experience Real-Time Malware Protection, Drift Prevention, and other security controls offered by Aqua.
+Aqua Probe is an interactive command-line tool for validating Aqua runtime security controls in Kubernetes and on explicitly selected Linux hosts over SSH. Host tests use Host Runtime Policies and native host processes, not container policies or Kubernetes exec.
 
 <img src="/misc/aqua-probe-demo.gif" height="500">
 
@@ -40,6 +40,8 @@ Aqua Probe is an interactive command-line tool designed to explore runtime secur
 29. Test Limit New Privileges
 30. Test Registries Allowed
 31. Test Brute Force Login Detection [Host Runtime Policy]
+
+Main menu option **33** opens the shared Host Runtime controls below. Option **32** remains Terminate Program.
 
 ## Limit Container Privileges
 
@@ -110,32 +112,48 @@ Configure Registries Allowed and choose an accessible image from an excluded reg
 
 ## Host Runtime Policies
 
-Brute Force Login Detection uses a **Host Runtime Policy**, with an Aqua Enforcer monitoring the target Linux host. Run it from menu option 31, or run it directly without Kubernetes startup checks:
+Use main menu option **33**, or open the Host Runtime menu directly without Kubernetes startup checks:
 
 ```bash
 ./aqua-probe.sh --host-runtime
 ```
 
-Enable Brute Force Login Detection in the Host Runtime Policy applied to the target. The target SSH service must accept password authentication. Supply its hostname/IP, SSH port, and a dedicated test account. Check account lockout settings, then enter an intentionally incorrect password at each SSH prompt. The script defaults to five attempts and permits up to ten per run; align the count and timing with your policy's detection threshold/window. Passwords are handled interactively by SSH and are not stored by Aqua Probe. SSH host-key verification remains enabled.
+Select an authorized Linux lab host monitored by an Aqua Enforcer. Supply its SSH hostname/IP, port, username, and optional local `.pem`/private key path. The selected connection is reused within the session; option **11** changes it. Commands execute as that user without automatic sudo or package installation. Bash is required on the host. SSH host-key verification remains enabled. Each test requires explicit confirmation, even with `--no-instructions`.
+
+| Host menu | Control | Host validation |
+| --- | --- | --- |
+| 1 | Block Cryptocurrency Mining | `wget http://crypto-loot.com`, bounded timeout, no redirects, response discarded |
+| 2 | Brute Force Login Detection | Existing bounded SSH authentication-failure workflow; separate target/account prompts |
+| 3 | DNS/IP Reputation | `curl http://68.183.212.246`, bounded timeout, response discarded |
+| 4 | File Block | `cat /etc/passwd`; configure this path as blocked; prints account information if allowed |
+| 5 | File Integrity Monitoring | Create, modify, chmod, and delete disposable files under `/tmp/aqua-probe-host-fim-*` |
+| 6 | Forensics | `echo aqua-probe-forensics-marker`, `id`, and `ls /tmp`; review host process collection |
+| 7 | Package Block | `tar`; its ordinary missing-arguments error is not proof of enforcement |
+| 8 | Port Scanning Detection | Bash `/dev/tcp` probes on ports 1-1024 of an explicitly authorized destination; default `10.0.0.1`, maximum 16 concurrent one-second probes |
+| 9 | Secure AI - Discovery | One native Python 3 HTTPS request to OpenAI; review host AI Findings |
+| 10 | Secure AI - Unauthorized Models | Same host request, with model matching the configured policy, e.g. `OpenAI@gpt-4` |
+
+Scope the corresponding **Host Runtime Policy** to the selected host and verify Enforcer coverage and feature availability. Shared commands can exercise the same signatures, but policy mode, network reputation, scan thresholds, host OS, and tenant support determine results. Failures from SSH, missing tools, network access, or permissions are not evidence of an Aqua block. Verify the matching host, policy, and timestamp in **Security Reports -> Audit**, or the relevant forensic/AI view.
+
+Host FIM deliberately never modifies or deletes the real `/etc/sudoers`. Configure monitoring for the disposable directory pattern and descendants before testing. A remote cleanup trap removes only its two test files and owned directory on normal exit and catchable signals. If enforcement denies cleanup, the process is forcibly killed, or the host disappears, inspect and remove only the printed owned directory manually. No containers, services, or persistent host applications are installed; audit/authentication records remain.
+
+Secure AI requires native Python 3, HTTPS connectivity, model access, and supported host Secure AI coverage. The model is prompted (default `gpt-4` for consistency with the existing example); select an available Chat Completions model and match the policy. A retired/unavailable model or API billing/authentication error is not an Aqua detection. A request can incur provider charges. The key prompt is hidden, shell tracing is disabled for the request, and the key travels only through encrypted SSH stdin to the host process and HTTPS to OpenAI, never in command arguments, files, or environment variables. Each request asks for a fresh key. The API request follows the [OpenAI Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+
+Host menu option **0** returns to the main menu, or exits when launched with `--host-runtime`. It does not run unrelated Kubernetes/Docker cleanup. Run `bash tests/test-host-runtime.sh` for offline mocked tests; these do not contact a host or OpenAI.
+
+### Brute Force Login Detection
+
+Brute Force remains directly accessible from main menu option **31** and host menu option **2**. Enable it in the Host Runtime Policy applied to the target. The target SSH service must accept password authentication for the password-based test. Supply its hostname/IP, SSH port, and a dedicated test account. Check account lockout settings, then enter an intentionally incorrect password at each SSH prompt. The script defaults to five attempts and permits up to ten per run; align the count and timing with your policy's detection threshold/window. Passwords are handled interactively by SSH and are not stored by Aqua Probe.
 
 The optional **SSH private key file path** prompt accepts a local key such as `~/.ssh/test.pem` (paths with spaces are supported; enter the path without surrounding quotes). Press Enter to retain password authentication. With a key, SSH uses public-key authentication and prompts for its passphrase if needed; Aqua Probe does not copy the key or store its passphrase. A valid authorized key succeeds and stops the test, so it does not generate brute-force failures. A key-based failure test requires rejected authentication attempts observed by the host and supported by the configured detection policy. A missing, unreadable, or invalid key does not prove detection.
 
 Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created; authentication and audit records remain for review. Menu option 32 terminates the program and runs the existing cleanup.
 
-Host Runtime controls include the following catalog supplied for this project. Brute Force Login Detection is the host test implemented here; the other entries are not additional host test functions. Shared signatures do not make the existing container tests Host Runtime Policy tests. Availability depends on the target OS and tenant configuration, particularly for Windows registry controls.
+The following host-specific controls remain catalog items without dedicated host test functions in this update:
 
-- Block Cryptocurrency Mining
-- Brute Force Login Detection
-- DNS/IP Reputation
-- File Block
-- File Integrity Monitoring
-- Forensics
+- Bypass Scope
 - OS Users and Groups Allowed
 - OS Users and Groups Blocked
-- Package Block
-- Port Scanning Detection
-- Secure AI - Discovery
-- Secure AI - Unauthorized Models
 - System Integrity Monitoring
 - Windows Registry Monitoring
 - Windows Registry Protection

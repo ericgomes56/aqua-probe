@@ -127,7 +127,7 @@ print_help() {
   echo "  --image <value>, -i <value>             Set the Aqua Probe test image name (default: ericgomes56/aqua-probe:2.0)"
   echo "  --namespace <value>, -ns <value>        Set the custom namespace where the Aqua Enforcer is deployed (default: aqua)"
   echo "  --no-instructions, -n                   Skip prerequisites instructions"
-  echo "  --host-runtime                         Run Brute Force Login Detection without Kubernetes checks"
+  echo "  --host-runtime                         Open Host Runtime controls without Kubernetes checks"
   echo "  --version, -v                           Show the current Aqua Probe build version"
   echo
   echo
@@ -3145,6 +3145,222 @@ This test connects directly to host SSH; it does not deploy or exec into a conta
     print_colored_message text "No test resources were created; host authentication and audit records remain for review."
 }
 
+# Quote remote scripts for the SSH login shell; do not interpolate user input as code.
+host_ssh() {
+    local quoted
+    quoted=${1//\'/\'\\\'\'}
+    ssh -T -p "$AQUA_PROBE_HOST_PORT" -l "$AQUA_PROBE_HOST_USER" \
+        "${AQUA_PROBE_HOST_AUTH[@]}" -o ConnectTimeout=10 -o ConnectionAttempts=1 \
+        -o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
+        -o ControlMaster=no -o ControlPath=none "$AQUA_PROBE_HOST" "bash -c '$quoted'"
+}
+
+configure_host_runtime() {
+    local host user port key os
+    AQUA_PROBE_HOST_READY=0
+    command -v ssh >/dev/null 2>&1 || return 1
+    print_instructions "Select an authorized Linux lab host monitored by an Aqua Enforcer.
+Commands run directly as the SSH user, never through Kubernetes or Docker. No sudo is added.
+SSH host-key verification stays enabled. Use a dedicated account and verify the destination."
+    read -r -p "$(format_prompt 'Monitored host IP or hostname: ')" host || return 1
+    [[ "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]] || { print_colored_message red 'Invalid host.'; return 1; }
+    read -r -p "$(format_prompt 'SSH username: ')" user || return 1
+    [[ "$user" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]] || { print_colored_message red 'Invalid username.'; return 1; }
+    read -r -p "$(format_prompt 'SSH port [22]: ')" port || return 1
+    port=${port:-22}
+    [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 )) || { print_colored_message red 'Invalid port.'; return 1; }
+    read -r -p "$(format_prompt 'SSH key file (.pem; Enter for SSH default authentication): ')" key || return 1
+    case "$key" in '~/'*) key="$HOME/${key#\~/}" ;; esac
+    AQUA_PROBE_HOST_AUTH=()
+    if [[ -n "$key" ]]; then
+        [[ -f "$key" && -r "$key" ]] || { print_colored_message red 'Key file must exist and be readable.'; return 1; }
+        AQUA_PROBE_HOST_AUTH=(-i "$key" -o IdentitiesOnly=yes)
+    fi
+    AQUA_PROBE_HOST=$host AQUA_PROBE_HOST_USER=$user AQUA_PROBE_HOST_PORT=$port
+    print_colored_message blue "Checking Linux SSH host: $user@$host:$port"
+    os=$(host_ssh 'uname -s' </dev/null) || { print_colored_message red 'SSH preflight failed.'; return 1; }
+    [[ "$os" == Linux ]] || { print_colored_message red 'A Linux host with Bash is required.'; return 1; }
+    AQUA_PROBE_HOST_READY=1
+}
+
+confirm_host_control() {
+    local title="$1" instructions="$2" proceed
+    print_test_header "$title" 'Host Runtime Policy'
+    [[ "${AQUA_PROBE_HOST_READY:-0}" == 1 ]] || configure_host_runtime || return 1
+    print_instructions "Apply the $title control in a Host Runtime Policy scoped to this host, not a Container Runtime Policy.
+Confirm Aqua Enforcer coverage, supported OS/tenant features, and policy mode. Other controls must not mask this test.
+$instructions"
+    print_colored_message yellow "Target: $AQUA_PROBE_HOST_USER@$AQUA_PROBE_HOST:$AQUA_PROBE_HOST_PORT"
+    # Host tests always require confirmation, including with --no-instructions.
+    read -r -p "$(format_prompt 'Run this test on the authorized host? Type yes: ')" proceed || return 1
+    [[ "$proceed" == yes ]]
+}
+
+review_host_control() {
+    print_audit_review
+    print_colored_message text "Filter by host $AQUA_PROBE_HOST and the test time; confirm the matching Host Runtime Policy."
+    print_colored_message yellow 'Command failure alone is not evidence of an Aqua block. Check SSH, dependencies, permissions, network errors, and Aqua events. Successful commands do not prove detection either.'
+}
+
+run_host_command() {
+    local status=0
+    print_colored_message blue "$1"
+    host_ssh "$1" </dev/null || status=$?
+    print_colored_message text "Remote exit status: $status"
+    review_host_control
+    return "$status"
+}
+
+test_host_cryptocurrency_mining() {
+    confirm_host_control 'Block Cryptocurrency Mining' 'Enable the control. Requires wget; contacts http://crypto-loot.com once, with a 15-second timeout. Response data is discarded and never executed.' || return
+    run_host_command 'wget --timeout=15 --tries=1 --max-redirect=0 -O /dev/null http://crypto-loot.com'
+}
+
+test_host_dns_ip_reputation() {
+    confirm_host_control 'DNS/IP Reputation' 'Enable reputation protection. Requires curl; contacts http://68.183.212.246 with a 15-second timeout. Response data is discarded and never executed.' || return
+    run_host_command 'curl --connect-timeout 5 --max-time 15 --output /dev/null http://68.183.212.246'
+}
+
+test_host_file_block() {
+    confirm_host_control 'File Block' "Add /etc/passwd to blocked files. The test runs cat /etc/passwd as the SSH user; it does not modify the file. Output includes local account information." || return
+    run_host_command 'cat /etc/passwd'
+}
+
+test_host_package_block() {
+    confirm_host_control 'Package Block' 'Add tar to blocked packages and ensure tar is installed. The test runs tar with no arguments, matching the container signature. Its normal usage error is NOT evidence of an Aqua block.' || return
+    run_host_command 'tar'
+}
+
+test_host_forensics() {
+    confirm_host_control 'Forensics' 'Enable host process activity and command-argument collection. This collection test runs echo, id, and ls /tmp. Successful execution is expected; verify the marker and processes in host forensic activity, not necessarily an incident.' || return
+    run_host_command 'echo aqua-probe-forensics-marker; id; ls /tmp'
+}
+
+test_host_file_integrity_monitoring() {
+    confirm_host_control 'File Integrity Monitoring' 'Monitor /tmp/aqua-probe-host-fim-* recursively (or its matching equivalent in your policy) for create, modify, permissions, and delete events. Uses a new private directory and disposable app.conf/backdoor.conf files. Never modifies real /etc/sudoers. Cleanup runs on normal exit and catchable signals; forced termination or host loss can require manual cleanup of the printed directory.' || return
+    local script
+    script=$(cat <<'HOST_FIM'
+set -e
+umask 077
+dir=$(mktemp -d /tmp/aqua-probe-host-fim-XXXXXXXX)
+printf 'Owned FIM test directory: %s\n' "$dir"
+cleanup() {
+    if ! { rm -f -- "$dir/app.conf" "$dir/backdoor.conf" && rmdir -- "$dir"; }; then
+        printf 'Cleanup incomplete; review ONLY this test directory: %s\n' "$dir" >&2
+        return 1
+    fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+printf 'debug=false\n' > "$dir/app.conf"
+printf 'malicious change\n' > "$dir/backdoor.conf"
+printf 'debug=true\n' >> "$dir/app.conf"
+chmod 777 "$dir/app.conf"
+rm -- "$dir/app.conf"
+HOST_FIM
+)
+    run_host_command "$script"
+}
+
+test_host_port_scanning_detection() {
+    local target script
+    print_colored_message yellow 'Scan only a destination you own or are explicitly authorized to test.'
+    read -r -p "$(format_prompt 'Authorized scan target IPv4/hostname [10.0.0.1]: ')" target || return 1
+    target=${target:-10.0.0.1}
+    [[ "$target" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { print_colored_message red 'Invalid scan target.'; return 1; }
+    confirm_host_control 'Port Scanning Detection' "Enable host Port Scanning Detection. Requires Bash and timeout. Scans TCP ports 1-1024 on $target using /dev/tcp, with one-second attempts and at most 16 concurrent probes. Tune the detection threshold/window; bounded concurrency may affect detection. No services or listeners are created." || return
+    script="target='$target'"$'\n'
+    script+=$(cat <<'HOST_SCAN'
+command -v timeout >/dev/null || exit 127
+trap 'jobs -pr | xargs -r kill; exit 130' INT TERM HUP
+for p in {1..1024}; do
+    timeout 1 bash -c 'echo > /dev/tcp/$1/$2' _ "$target" "$p" 2>/dev/null &
+    if (( p % 16 == 0 )); then wait; fi
+done
+wait
+HOST_SCAN
+)
+    run_host_command "$script"
+}
+
+test_host_secure_ai() {
+    local mode="$1"
+    confirm_host_control "Secure AI - $mode" 'Enable Secure AI host coverage. Requires native Python 3 and outbound HTTPS to api.openai.com. Sends one small paid API request from the host (no Kubernetes app). Confirm tenant/Enforcer support and model access. For Unauthorized Models, set Service OpenAI and Model Name to the selected model, e.g. OpenAI@gpt-4. API authentication, billing, or unavailable-model errors do not prove an Aqua block.' || return
+    # Isolate secrets and disable tracing without losing the selected SSH connection.
+    (
+    set +x
+    local model key code command status=0
+    read -r -p "$(format_prompt 'OpenAI model (must match the policy) [gpt-4]: ')" model || return 1
+    model=${model:-gpt-4}
+    [[ "$model" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:-]*$ ]] || { print_colored_message red 'Invalid model name.'; return 1; }
+    read -r -s -p "$(format_prompt 'OpenAI API key (hidden; used only for this request): ')" key || return 1
+    echo
+    [[ -n "$key" ]] || { print_colored_message red 'API key cannot be empty.'; return 1; }
+    code=$(cat <<'HOST_AI'
+import json, sys, urllib.request, urllib.error
+key = sys.stdin.readline().strip()
+body = json.dumps({"model": sys.argv[1], "messages": [{"role": "user", "content": "Reply with OK. Aqua Probe host discovery test."}], "max_tokens": 8}).encode()
+request = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=body, headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+try:
+    with urllib.request.urlopen(request, timeout=30) as response:
+        print("OpenAI HTTP status:", response.status)
+except urllib.error.HTTPError as error:
+    print("OpenAI HTTP error:", error.code, "- review provider access and Aqua evidence.")
+    sys.exit(1)
+except Exception:
+    print("Request failed; check connectivity, TLS trust, and Aqua evidence. Credentials are not printed.")
+    sys.exit(1)
+HOST_AI
+)
+    printf -v command 'python3 -c %q %q' "$code" "$model"
+    printf '%s\n' "$key" | host_ssh "$command" || status=$?
+    unset key
+    print_colored_message text "Request exit status: $status"
+    print_colored_message blue 'Review host AI Findings and Security Reports -> Audit for OpenAI and the selected model.'
+    review_host_control
+    return "$status"
+    )
+}
+
+test_host_secure_ai_discovery() { test_host_secure_ai Discovery; }
+test_host_secure_ai_unauthorized_models() { test_host_secure_ai 'Unauthorized Models'; }
+
+host_runtime_menu() {
+    local choice
+    while true; do
+        print_test_header 'Host Runtime Controls' 'Direct SSH | Linux host | No Kubernetes checks'
+        print_menu_option 1 'Block Cryptocurrency Mining'
+        print_menu_option 2 'Brute Force Login Detection'
+        print_menu_option 3 'DNS/IP Reputation'
+        print_menu_option 4 'File Block'
+        print_menu_option 5 'File Integrity Monitoring'
+        print_menu_option 6 'Forensics'
+        print_menu_option 7 'Package Block'
+        print_menu_option 8 'Port Scanning Detection'
+        print_menu_option 9 'Secure AI - Discovery'
+        print_menu_option 10 'Secure AI - Unauthorized Models'
+        print_menu_option 11 'Select/change SSH host' teal
+        print_menu_option 0 'Leave Host Runtime menu (exit in --host-runtime mode)' yellow
+        read -r -p "$(format_prompt 'Select a host control (0-11): ')" choice || return 0
+        case "$choice" in
+            0) return 0 ;;
+            1) test_host_cryptocurrency_mining ;;
+            2) test_brute_force_login_detection ;;
+            3) test_host_dns_ip_reputation ;;
+            4) test_host_file_block ;;
+            5) test_host_file_integrity_monitoring ;;
+            6) test_host_forensics ;;
+            7) test_host_package_block ;;
+            8) test_host_port_scanning_detection ;;
+            9) test_host_secure_ai_discovery ;;
+            10) test_host_secure_ai_unauthorized_models ;;
+            11) configure_host_runtime ;;
+            *) print_colored_message yellow 'Choose an option from 0 to 11.' ;;
+        esac
+    done
+}
+
 print_main_menu() {
     print_test_header "Security Controls" "Select a control to validate"
     print_colored_message blue "  TEST ENVIRONMENT"
@@ -3183,6 +3399,7 @@ print_main_menu() {
     echo
     print_colored_message blue "  HOST RUNTIME CONTROLS"
     print_menu_option 31 "Test Brute Force Login Detection [Host Runtime Policy]" text
+    print_menu_option 33 "Host Runtime controls [SSH]" teal
     echo
     print_colored_message blue "  SESSION"
     print_menu_option 32 "Terminate Program" yellow
@@ -3198,7 +3415,7 @@ main() {
     echo
 
     if [[ "$AQUA_PROBE_HOST_RUNTIME" == 1 ]]; then
-        test_brute_force_login_detection
+        host_runtime_menu
         return $?
     fi
 
@@ -3228,7 +3445,7 @@ main() {
 
     while true; do
         print_main_menu
-        read -p "$(format_prompt "Enter your choice (1-32): ")" choice
+        read -p "$(format_prompt "Enter your choice (1-33): ")" choice
 
         case $choice in
             1)
@@ -3326,6 +3543,9 @@ main() {
                 ;;
             32)
                 terminate_program
+                ;;
+            33)
+                host_runtime_menu
                 ;;
         esac
 

@@ -21,7 +21,7 @@ for width in 30 40 60 79 80 100; do
     )
     [[ "$output" != *$'\033'* ]] || fail 'Unexpected ANSI escape'
     printf '%s\n' "$output" | awk -v w="$width" 'length > w {exit 1}' || fail "Overflow at $width columns"
-    for number in {1..32}; do
+    for number in {1..33}; do
         count=$(printf '%s\n' "$output" | grep -cE "^ +${number}\\. ")
         [[ "$count" == 1 ]] || fail "Menu option $number missing or duplicated"
     done
@@ -39,4 +39,4 @@ COLORTERM=truecolor
 [[ "$(print_colored_message teal 'Redirected')" == 'Redirected' ]] || fail 'Redirected output has color'
 COLORTERM=
 [[ "$(theme_code yellow)" == '1;33;40' ]] || fail 'ANSI fallback mismatch'
-printf 'PASS: responsive layout, all 32 options, plain output, prompts, and palette fallbacks\n'
+printf 'PASS: responsive layout, all 33 options, plain output, prompts, and palette fallbacks\n'
