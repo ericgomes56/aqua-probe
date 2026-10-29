@@ -25,6 +25,7 @@ for width in 30 40 60 79 80 100; do
         count=$(printf '%s\n' "$output" | grep -cE "^ +${number}\\. ")
         [[ "$count" == 1 ]] || fail "Menu option $number missing or duplicated"
     done
+    print_main_menu | awk '/^ +[0-9]+[.] / {n=$1; sub(/[.]$/, "", n); if (n != ++count) exit 1} END {if (count != 42) exit 1}' || fail 'Nonsequential menu'
 done
 [[ "$(format_prompt 'Ready? ')" == '> Ready? ' ]] || fail 'Prompt text changed'
 [[ "$(print_colored_message red 'Failure details')" == 'Failure details' ]] || fail 'Redirected message changed'

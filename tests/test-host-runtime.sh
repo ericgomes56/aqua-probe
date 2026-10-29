@@ -96,7 +96,7 @@ check_container_existence() { return 1; }
 sleep() { :; }
 configure_host_runtime() { printf 'DISPATCH configure_host_runtime\n'; }
 host_runtime_menu() { fail 'Main menu entered the old host submenu'; }
-result=$(main <<< $'31\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42')
+result=$(main <<< $'2\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41')
 for control in "${controls[@]}" configure_host_runtime; do
     [[ "$result" == *"DISPATCH $control"* ]] || fail "Missing direct $control dispatch"
 done

@@ -3346,56 +3346,57 @@ host_runtime_menu() {
 }
 
 print_main_menu() {
-    print_test_header "Security Controls" "Select a control to validate"
-    print_colored_message blue "  TEST ENVIRONMENT"
-    print_menu_option 1 "Deploy/Redeploy test container" teal
+    print_test_header "Security Controls" "Container & Workload | Host Runtime"
     echo
-    print_colored_message blue "  RUNTIME & WORKLOAD CONTROLS"
-    print_menu_option 2 "Test Bad DNS/IP Reputation" text
-    print_menu_option 3 "Test Block Container Exec" text
-    print_menu_option 4 "Test Block Cryptocurrency Mining" text
-    print_menu_option 5 "Test Block Fileless Execution" text
-    print_menu_option 6 "Test Block Non-compliant Images" text
-    print_menu_option 7 "Test Block Non-compliant Resources" text
-    print_menu_option 8 "Test Block Non-Kubernetes Containers" text
-    print_menu_option 9 "Test Block Reverse Shell" text
-    print_menu_option 10 "Test Block Unregistered Images" text
-    print_menu_option 11 "Test Drift Prevention" text
-    print_menu_option 12 "Test Executables Blocked" text
-    print_menu_option 13 "Test File Block" text
-    print_menu_option 14 "Test File Integrity Monitoring" text
-    print_menu_option 15 "Test Limit Container Privileges" text
-    print_menu_option 16 "Test Package Block" text
-    print_menu_option 17 "Test Port Block" text
-    print_menu_option 18 "Test Port Scanning Detection" text
-    print_menu_option 19 "Test Real-time Malware Protection [Delete action]" text
-    print_menu_option 20 "Test Secure AI - Discovery" text
-    print_menu_option 21 "Test Secure AI - Protection" text
-    print_menu_option 22 "Test Secure AI - Unauthorized Models" text
-    print_menu_option 23 "Test System Integrity Monitoring" text
-    print_menu_option 24 "Test Volumes Blocked" text
-    print_menu_option 25 "Test Block Outdated Images" text
-    print_menu_option 26 "Test Capabilities Block" text
-    print_menu_option 27 "Test Executables Allowed" text
-    print_menu_option 28 "Test Forensics" text
-    print_menu_option 29 "Test Limit New Privileges" text
-    print_menu_option 30 "Test Registries Allowed" text
+    print_colored_message blue "  SETUP"
+    print_menu_option 1 "Deploy/Redeploy test container" teal
+    print_menu_option 2 "Select/change SSH host" teal
+    echo
+    print_colored_message blue "  CONTAINER & WORKLOAD"
+    print_menu_option 3 "Bad DNS/IP Reputation" text
+    print_menu_option 4 "Block Container Exec" text
+    print_menu_option 5 "Block Cryptocurrency Mining" text
+    print_menu_option 6 "Block Fileless Execution" text
+    print_menu_option 7 "Block Non-compliant Images" text
+    print_menu_option 8 "Block Non-compliant Resources" text
+    print_menu_option 9 "Block Non-Kubernetes Containers" text
+    print_menu_option 10 "Block Outdated Images" text
+    print_menu_option 11 "Block Reverse Shell" text
+    print_menu_option 12 "Block Unregistered Images" text
+    print_menu_option 13 "Capabilities Block" text
+    print_menu_option 14 "Drift Prevention" text
+    print_menu_option 15 "Executables Allowed" text
+    print_menu_option 16 "Executables Blocked" text
+    print_menu_option 17 "File Block" text
+    print_menu_option 18 "File Integrity Monitoring" text
+    print_menu_option 19 "Forensics" text
+    print_menu_option 20 "Limit Container Privileges" text
+    print_menu_option 21 "Limit New Privileges" text
+    print_menu_option 22 "Package Block" text
+    print_menu_option 23 "Port Block" text
+    print_menu_option 24 "Port Scanning Detection" text
+    print_menu_option 25 "Real-time Malware Protection [Delete action]" text
+    print_menu_option 26 "Registries Allowed" text
+    print_menu_option 27 "Secure AI - Discovery" text
+    print_menu_option 28 "Secure AI - Protection" text
+    print_menu_option 29 "Secure AI - Unauthorized Models" text
+    print_menu_option 30 "System Integrity Monitoring" text
+    print_menu_option 31 "Volumes Blocked" text
     echo
     print_colored_message blue "  HOST RUNTIME CONTROLS"
-    print_menu_option 31 "Test Brute Force Login Detection [Host Runtime Policy]" text
-    print_menu_option 33 "Test Block Cryptocurrency Mining [Host]" text
-    print_menu_option 34 "Test DNS/IP Reputation [Host]" text
-    print_menu_option 35 "Test File Block [Host]" text
-    print_menu_option 36 "Test File Integrity Monitoring [Host]" text
-    print_menu_option 37 "Test Forensics [Host]" text
-    print_menu_option 38 "Test Package Block [Host]" text
-    print_menu_option 39 "Test Port Scanning Detection [Host]" text
-    print_menu_option 40 "Test Secure AI - Discovery [Host]" text
-    print_menu_option 41 "Test Secure AI - Unauthorized Models [Host]" text
-    print_menu_option 42 "Select/change SSH host" teal
+    print_menu_option 32 "Block Cryptocurrency Mining" text
+    print_menu_option 33 "Brute Force Login Detection" text
+    print_menu_option 34 "DNS/IP Reputation" text
+    print_menu_option 35 "File Block" text
+    print_menu_option 36 "File Integrity Monitoring" text
+    print_menu_option 37 "Forensics" text
+    print_menu_option 38 "Package Block" text
+    print_menu_option 39 "Port Scanning Detection" text
+    print_menu_option 40 "Secure AI - Discovery" text
+    print_menu_option 41 "Secure AI - Unauthorized Models" text
     echo
     print_colored_message blue "  SESSION"
-    print_menu_option 32 "Terminate Program" yellow
+    print_menu_option 42 "Terminate Program" yellow
     echo
 }
 
@@ -3446,100 +3447,100 @@ main() {
                 deploy_test_container
                 ;;
             2)
-                test_bad_dns_ip_reputation
+                configure_host_runtime
                 ;;
             3)
-                test_block_container_exec
+                test_bad_dns_ip_reputation
                 ;;
             4)
-                test_block_cryptocurrency_mining
+                test_block_container_exec
                 ;;
             5)
-                test_block_fileless_execution
+                test_block_cryptocurrency_mining
                 ;;
             6)
-                test_block_non_compliant_images
+                test_block_fileless_execution
                 ;;
             7)
-                test_block_non_compliant_resources
+                test_block_non_compliant_images
                 ;;
             8)
-                test_block_non_kubernetes_containers
+                test_block_non_compliant_resources
                 ;;
             9)
-                test_reverse_shell
+                test_block_non_kubernetes_containers
                 ;;
             10)
-                test_block_unregistered_images
-                ;;
-            11)
-                test_drift_prevention
-                ;;
-            12)
-                test_executables_blocked
-                ;;
-            13)
-                test_file_block
-                ;;
-            14)
-                test_file_integrity_monitoring
-                ;;
-            15)
-                test_limit_container_privileges
-                ;;
-            16)
-                test_package_block
-                ;;
-            17)
-                test_port_block
-                ;;
-            18)
-                test_port_scanning_detection
-                ;;
-            19)
-                test_realtime_malware_protection
-                ;;
-            20)
-                test_secure_ai_discovery
-                ;;
-            21)
-                test_secure_ai_protection
-                ;;
-            22)
-                test_secure_ai_unauthorized_models
-                ;;
-            23)
-                test_system_integrity_monitoring
-                ;;
-            24)
-                test_volumes_blocked
-                ;;
-            25)
                 test_block_outdated_images
                 ;;
-            26)
+            11)
+                test_reverse_shell
+                ;;
+            12)
+                test_block_unregistered_images
+                ;;
+            13)
                 test_capabilities_block
                 ;;
-            27)
+            14)
+                test_drift_prevention
+                ;;
+            15)
                 test_executables_allowed
                 ;;
-            28)
+            16)
+                test_executables_blocked
+                ;;
+            17)
+                test_file_block
+                ;;
+            18)
+                test_file_integrity_monitoring
+                ;;
+            19)
                 test_forensics
                 ;;
-            29)
+            20)
+                test_limit_container_privileges
+                ;;
+            21)
                 test_limit_new_privileges
                 ;;
-            30)
+            22)
+                test_package_block
+                ;;
+            23)
+                test_port_block
+                ;;
+            24)
+                test_port_scanning_detection
+                ;;
+            25)
+                test_realtime_malware_protection
+                ;;
+            26)
                 test_registries_allowed
                 ;;
+            27)
+                test_secure_ai_discovery
+                ;;
+            28)
+                test_secure_ai_protection
+                ;;
+            29)
+                test_secure_ai_unauthorized_models
+                ;;
+            30)
+                test_system_integrity_monitoring
+                ;;
             31)
-                test_brute_force_login_detection
+                test_volumes_blocked
                 ;;
             32)
-                terminate_program
+                test_host_cryptocurrency_mining
                 ;;
             33)
-                test_host_cryptocurrency_mining
+                test_brute_force_login_detection
                 ;;
             34)
                 test_host_dns_ip_reputation
@@ -3566,7 +3567,7 @@ main() {
                 test_host_secure_ai_unauthorized_models
                 ;;
             42)
-                configure_host_runtime
+                terminate_program
                 ;;
             *)
                 print_colored_message yellow 'Choose an option from 1 to 42.'

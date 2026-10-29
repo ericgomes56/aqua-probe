@@ -9,43 +9,62 @@ Aqua Probe is an interactive command-line tool for validating Aqua runtime secur
 <img src="/misc/aqua-probe-demo.gif" height="500">
 
 ## Features
-1. Deploy a test container within a Kubernetes cluster
-2. Test Bad DNS/IP Reputation
-3. Test Block Container Exec
-4. Test Block Cryptocurrency Mining
-5. Test Block Fileless Exec
-6. Test Block Non-compliant Images
-7. Test Block Non-compliant Resources
-8. Test Block Non-Kubernetes Containers
-9. Test Block Reverse Shell
-10. Test Block Unregistered Images
-11. Test Drift Prevention
-12. Test Executables Blocked
-13. Test File Block
-14. Test File Integrity Monitoring
-15. Test Limit Container Privileges
-16. Test Package Block
-17. Test Port Block
-18. Test Port Scanning Detection
-19. Test Real-time Malware Protection with delete action
-20. Test Secure AI - Discovery
-21. Test Secure AI - Protection
-22. Test Secure AI - Unauthorized Models
-23. Test System Integrity Monitoring
-24. Test Volumes Blocked
-25. Test Block Outdated Images
-26. Test Capabilities Block
-27. Test Executables Allowed
-28. Test Forensics
-29. Test Limit New Privileges
-30. Test Registries Allowed
-31. Test Brute Force Login Detection [Host Runtime Policy]
 
-The main menu lists Host Runtime controls directly: **31** for Brute Force, **33-41** for the shared host tests, and **42** to select/change the SSH host. Option **32** remains Terminate Program.
+### Setup
+1. Deploy/Redeploy test container
+2. Select/change SSH host
+
+### Container & Workload Controls
+3. Bad DNS/IP Reputation
+4. Block Container Exec
+5. Block Cryptocurrency Mining
+6. Block Fileless Execution
+7. Block Non-compliant Images
+8. Block Non-compliant Resources
+9. Block Non-Kubernetes Containers
+10. Block Outdated Images
+11. Block Reverse Shell
+12. Block Unregistered Images
+13. Capabilities Block
+14. Drift Prevention
+15. Executables Allowed
+16. Executables Blocked
+17. File Block
+18. File Integrity Monitoring
+19. Forensics
+20. Limit Container Privileges
+21. Limit New Privileges
+22. Package Block
+23. Port Block
+24. Port Scanning Detection
+25. Real-time Malware Protection [Delete action]
+26. Registries Allowed
+27. Secure AI - Discovery
+28. Secure AI - Protection
+29. Secure AI - Unauthorized Models
+30. System Integrity Monitoring
+31. Volumes Blocked
+
+### Host Runtime Controls
+32. Block Cryptocurrency Mining
+33. Brute Force Login Detection
+34. DNS/IP Reputation
+35. File Block
+36. File Integrity Monitoring
+37. Forensics
+38. Package Block
+39. Port Scanning Detection
+40. Secure AI - Discovery
+41. Secure AI - Unauthorized Models
+
+### Session
+42. Terminate Program
+
+Controls are alphabetized within each scope. These numbers match the main menu; the `--host-runtime` interface retains its separate host-only numbering.
 
 ## Limit Container Privileges
 
-Menu option 15 uses a Container Runtime Policy with these options from the Aqua UI:
+Menu option 20 uses a Container Runtime Policy with these options from the Aqua UI:
 
 | Platform | Option | Test coverage |
 | --- | --- | --- |
@@ -118,12 +137,12 @@ Choose a test directly under **HOST RUNTIME CONTROLS** in the main menu, or laun
 ./aqua-probe.sh --host-runtime
 ```
 
-Select an authorized Linux lab host monitored by an Aqua Enforcer. Supply its SSH hostname/IP, port, username, and optional local `.pem`/private key path. The selected connection is reused within the session; main option **42** (host-only option **11**) changes it. Commands execute as that user without automatic sudo or package installation. Bash is required on the host. SSH host-key verification remains enabled. Each test requires explicit confirmation, even with `--no-instructions`.
+Select an authorized Linux lab host monitored by an Aqua Enforcer. Supply its SSH hostname/IP, port, username, and optional local `.pem`/private key path. The selected connection is reused within the session; main option **2** (host-only option **11**) changes it. Commands execute as that user without automatic sudo or package installation. Bash is required on the host. SSH host-key verification remains enabled. Each test requires explicit confirmation, even with `--no-instructions`.
 
 | Main menu | Host-only menu | Control | Host validation |
 | --- | --- | --- | --- |
-| 33 | 1 | Block Cryptocurrency Mining | `wget http://crypto-loot.com`, bounded timeout, no redirects, response discarded |
-| 31 | 2 | Brute Force Login Detection | Existing bounded SSH authentication-failure workflow; separate target/account prompts |
+| 32 | 1 | Block Cryptocurrency Mining | `wget http://crypto-loot.com`, bounded timeout, no redirects, response discarded |
+| 33 | 2 | Brute Force Login Detection | Existing bounded SSH authentication-failure workflow; separate target/account prompts |
 | 34 | 3 | DNS/IP Reputation | `curl http://68.183.212.246`, bounded timeout, response discarded |
 | 35 | 4 | File Block | `cat /etc/passwd`; configure this path as blocked; prints account information if allowed |
 | 36 | 5 | File Integrity Monitoring | Create, modify, chmod, and delete disposable files under `/tmp/aqua-probe-host-fim-*` |
@@ -143,11 +162,11 @@ In `--host-runtime` mode, option **0** exits without running unrelated Kubernete
 
 ### Brute Force Login Detection
 
-Brute Force remains directly accessible from main menu option **31** and host menu option **2**. Enable it in the Host Runtime Policy applied to the target. The target SSH service must accept password authentication for the password-based test. Supply its hostname/IP, SSH port, and a dedicated test account. Check account lockout settings, then enter an intentionally incorrect password at each SSH prompt. The script defaults to five attempts and permits up to ten per run; align the count and timing with your policy's detection threshold/window. Passwords are handled interactively by SSH and are not stored by Aqua Probe.
+Brute Force remains directly accessible from main menu option **33** and host menu option **2**. Enable it in the Host Runtime Policy applied to the target. The target SSH service must accept password authentication for the password-based test. Supply its hostname/IP, SSH port, and a dedicated test account. Check account lockout settings, then enter an intentionally incorrect password at each SSH prompt. The script defaults to five attempts and permits up to ten per run; align the count and timing with your policy's detection threshold/window. Passwords are handled interactively by SSH and are not stored by Aqua Probe.
 
 The optional **SSH private key file path** prompt accepts a local key such as `~/.ssh/test.pem` (paths with spaces are supported; enter the path without surrounding quotes). Press Enter to retain password authentication. With a key, SSH uses public-key authentication and prompts for its passphrase if needed; Aqua Probe does not copy the key or store its passphrase. A valid authorized key succeeds and stops the test, so it does not generate brute-force failures. A key-based failure test requires rejected authentication attempts observed by the host and supported by the configured detection policy. A missing, unreadable, or invalid key does not prove detection.
 
-Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created; authentication and audit records remain for review. Menu option 32 terminates the program and runs the existing cleanup.
+Confirm actual authentication failures in the host logs and review **Security Reports -> Audit** in Aqua. A connection failure, host-key error, or nonzero SSH exit code does not establish an Aqua detection. Unexpected successful authentication stops the test. No Kubernetes, Docker, or host test resources are created; authentication and audit records remain for review. Menu option 42 terminates the program and runs the existing cleanup.
 
 The following host-specific controls remain catalog items without dedicated host test functions in this update:
 
@@ -159,7 +178,7 @@ The following host-specific controls remain catalog items without dedicated host
 - Windows Registry Protection
 
 ## Usage
-The banner, control headings, menu, prompts, and status messages share [Aqua's website palette](https://www.aquasec.com/): electric blue and teal on deep navy. Teal highlights prompts and review guidance, yellow marks prerequisites and warnings, and magenta marks errors. Titles are centered, menu entries and prerequisites wrap to the terminal width, and menu groups distinguish workload controls from host controls without changing option numbers. Commands and external tool output remain plain and copyable. True-color terminals use the exact brand colors; other color terminals use standard ANSI equivalents. Set `NO_COLOR=1` for plain-text output; redirected output and `TERM=dumb` also omit color codes.
+The banner, control headings, menu, prompts, and status messages share [Aqua's website palette](https://www.aquasec.com/): electric blue and teal on deep navy. Teal highlights prompts and review guidance, yellow marks prerequisites and warnings, and magenta marks errors. Titles are centered, menu entries and prerequisites wrap to the terminal width, and menu groups distinguish workload controls from host controls with sequential main-menu numbering. Commands and external tool output remain plain and copyable. True-color terminals use the exact brand colors; other color terminals use standard ANSI equivalents. Set `NO_COLOR=1` for plain-text output; redirected output and `TERM=dumb` also omit color codes.
 
 Run `bash tests/test-terminal-theme.sh` to check the terminal formatting without deploying resources or executing security tests.
 
