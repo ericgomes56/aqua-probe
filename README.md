@@ -18,6 +18,7 @@
 <p align="center">
   <a href="#quick-start">Quick start</a> &middot;
   <a href="#capabilities">Capabilities</a> &middot;
+  <a href="#see-aqua-probe-in-action">Walkthrough</a> &middot;
   <a href="docs/control-reference.md">Control reference</a> &middot;
   <a href="#documentation">Documentation</a>
 </p>
@@ -31,6 +32,35 @@ Aqua Probe is an interactive Bash tool for exercising Aqua runtime security cont
 Use it to structure customer workshops, Compass classes, technical enablement, demos, and proofs of value: select a control, explain the expected behavior, run the test, and review what actually happened. Policies are configured by the operator; Aqua Probe does not automatically create or restore Aqua policies.
 
 This repository does not establish Aqua Probe as an officially supported Aqua Security product.
+
+## See Aqua Probe in Action
+
+### One Menu, Two Runtime Scopes
+
+Setup, container/workload controls, host controls, and session cleanup are grouped in a single terminal menu. Select a control to follow its policy prerequisites, test steps, and evidence-review guidance.
+
+<p align="center">
+  <a href="misc/aqua-probe-advanced-commands.png">
+    <img src="misc/aqua-probe-advanced-commands.png" width="560" alt="Aqua Probe terminal menu showing setup, container and workload controls, host runtime controls, and session cleanup options">
+  </a>
+</p>
+
+<p align="center"><em>Current terminal menu, captured November 2, 2026. Select the image for the full-size view.</em></p>
+
+<details>
+<summary><strong>Watch the terminal walkthrough</strong> &middot; 48 seconds</summary>
+
+Recorded November 2, 2026. Expand to view the demo; collapse to keep the page still while reading.
+
+<p align="center">
+  <a href="misc/aqua-probe-demo.gif">
+    <img src="misc/aqua-probe-demo.gif" width="680" alt="Recorded Aqua Probe terminal session demonstrating the interactive workflow">
+  </a>
+</p>
+
+[Open the full-size demo](misc/aqua-probe-demo.gif). This recording illustrates a lab session, not a guarantee of detection in another environment. Review the [safety guidance](#lab-safety-and-cleanup) before testing.
+
+</details>
 
 ## Capabilities
 
@@ -165,9 +195,9 @@ The CLI initializes image and namespace defaults at startup. Use flags rather th
 | [Rebranding summary](SUMMARY_REPORT.md) | Historical migration notes |
 
 <details>
-<summary>Earlier visual walkthroughs</summary>
+<summary>Earlier PDF guide</summary>
 
-The [PDF user guide](user-guide/Aqua-Probe_Userguide.pdf), [terminal screenshot](misc/aqua-probe-advanced-commands.png), and [recorded demo](misc/aqua-probe-demo.gif) are retained for reference. They predate the current interface and may show older branding, menu numbers, or workflows. Use the current script and control reference for instructions.
+The [PDF user guide](user-guide/Aqua-Probe_Userguide.pdf) is retained for reference. It predates the current interface and may show older branding, image versions, menu numbers, or workflows. Use the current script and control reference for instructions. The updated [terminal screenshot and demo](#see-aqua-probe-in-action) are featured above.
 
 </details>
 
