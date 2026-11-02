@@ -37,7 +37,7 @@ Aqua Probe is an interactive command-line tool for validating Aqua runtime secur
 22. Package Block
 23. Port Block
 24. Port Scanning Detection
-25. Real-time Malware Protection [Delete action]
+25. Real-time Malware Protection
 26. Registries Allowed
 27. Secure AI - Discovery
 28. Secure AI - Protection

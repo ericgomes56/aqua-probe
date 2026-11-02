@@ -3678,7 +3678,7 @@ print_main_menu() {
     print_menu_option 22 "Package Block" text
     print_menu_option 23 "Port Block" text
     print_menu_option 24 "Port Scanning Detection" text
-    print_menu_option 25 "Real-time Malware Protection [Delete action]" text
+    print_menu_option 25 "Real-time Malware Protection" text
     print_menu_option 26 "Registries Allowed" text
     print_menu_option 27 "Secure AI - Discovery" text
     print_menu_option 28 "Secure AI - Protection" text
