@@ -5,6 +5,11 @@ eval "$(sed '$d' aqua-probe.sh)"
 export NO_COLOR=1
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit 1; }
 ssh() { fail 'Selector tests must not contact a host'; }
+guidance=$(print_host_os_requirements)
+for version in 2019 2022 2025; do
+    [[ "$guidance" == *"Windows Server $version"* ]] || fail 'Missing Windows support guidance'
+done
+[[ "$(print_host_os_requirements linux)" == 'Linux: Please refer to the official Aqua system requirements documentation for an updated list of supported distributions and versions.' ]] || fail 'Missing Linux support guidance'
 configure_host_runtime() {
     AQUA_PROBE_HOST=linux-lab AQUA_PROBE_HOST_USER=linux-admin AQUA_PROBE_HOST_PORT=2222
     AQUA_PROBE_HOST_READY=1

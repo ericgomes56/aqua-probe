@@ -136,6 +136,13 @@ Configure Registries Allowed and choose an accessible image from an excluded reg
 
 ## Host Runtime Policies
 
+Host OS selection displays the following support guidance:
+
+- **Windows:** Supported only on Windows Server 2019, Windows Server 2022, and Windows Server 2025. Please refer to the official Aqua system requirements documentation for an updated list.
+- **Linux:** Please refer to the official Aqua system requirements documentation for an updated list of supported distributions and versions.
+
+This is informational guidance, not an automatic OS-version compatibility check.
+
 Choose a test directly under **HOST RUNTIME CONTROLS** in the main menu, or launch the host-only interface without Kubernetes startup checks:
 
 ```bash

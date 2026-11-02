@@ -3144,9 +3144,20 @@ host_ssh() {
         -o ControlMaster=no -o ControlPath=none "$AQUA_PROBE_HOST" "bash -c '$quoted'"
 }
 
+print_host_os_requirements() {
+    local platform="${1:-all}"
+    if [[ "$platform" == all || "$platform" == windows ]]; then
+        print_colored_message yellow 'Windows: Supported only on Windows Server 2019, Windows Server 2022, and Windows Server 2025. Please refer to the official Aqua system requirements documentation for an updated list.'
+    fi
+    if [[ "$platform" == all || "$platform" == linux ]]; then
+        print_colored_message text 'Linux: Please refer to the official Aqua system requirements documentation for an updated list of supported distributions and versions.'
+    fi
+}
+
 select_ssh_host() {
     local platform
     print_test_header 'Select/change SSH host' 'Saved separately for Linux and Windows controls'
+    print_host_os_requirements
     read -r -p "$(format_prompt 'Host OS (linux/windows): ')" platform || return 1
     case "$platform" in
         linux) configure_host_runtime || return 1 ;;
@@ -3160,6 +3171,7 @@ select_ssh_host() {
 configure_host_runtime() {
     local host user port key os
     AQUA_PROBE_HOST_READY=0
+    print_host_os_requirements linux
     command -v ssh >/dev/null 2>&1 || return 1
     print_instructions "Select an authorized Linux lab host monitored by an Aqua Enforcer.
 Commands run directly as the SSH user, never through Kubernetes or Docker. No sudo is added.
@@ -3338,6 +3350,7 @@ windows_powershell() {
 
 configure_windows_registry_host() {
     local host user port key sid user_pattern='^[a-zA-Z0-9_][a-zA-Z0-9_.@\\-]*$'
+    print_host_os_requirements windows
     [[ -z "${AQUA_PROBE_WINDOWS_RUN_ID:-}" ]] || { print_colored_message red 'Clean up the pending Windows registry test before changing hosts.'; return 1; }
     AQUA_PROBE_WINDOWS_READY=0
     command -v ssh >/dev/null && command -v python3 >/dev/null || { print_colored_message red 'Local OpenSSH and Python 3 are required.'; return 1; }
@@ -3521,6 +3534,7 @@ Use an existing dedicated account with VALID credentials. This is not a brute-fo
 Keep a separate administrator recovery session AND out-of-band console access. An allowlist can lock out every unlisted administrator; preserve recovery users/groups explicitly.
 Check OS/account lockout rules. Do not modify production access policies. The script creates no accounts/groups and never changes Aqua policies automatically.'
     command -v ssh >/dev/null || { print_colored_message red 'OpenSSH is required.'; return 1; }
+    print_host_os_requirements
     read -r -p "$(format_prompt "Host OS (linux/windows) [${AQUA_PROBE_SELECTED_HOST_OS:-choose one}]: ")" platform || return 1
     platform=${platform:-${AQUA_PROBE_SELECTED_HOST_OS:-}}
     [[ "$platform" == linux || "$platform" == windows ]] || { print_colored_message red 'Choose linux or windows.'; return 1; }
