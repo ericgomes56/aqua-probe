@@ -239,6 +239,8 @@ The banner, control headings, menu, prompts, and status messages share [Aqua's w
 
 Run `bash tests/test-terminal-theme.sh` to check the terminal formatting without deploying resources or executing security tests.
 
+Instructions use aligned numbered steps or bullets with hanging indents, blue **RUN** steps, **CHECK THE RESULT** guidance, and teal **REVIEW IN AQUA** sections. Long prose wraps to the terminal width while displayed commands remain unwrapped for copying. CLI help and platform support use the same spacing and palette. Run `bash tests/test-instruction-formatting.sh` to validate layouts from 30 to 100 columns without running security tests.
+
 Startup uses a themed **Environment Checks** section with numbered `CHECK`, `PASS`, and `FAIL` states. A pass is printed only after the relevant Kubernetes command succeeds; DaemonSet/deployment checks confirm resource existence, not workload readiness. Run `bash tests/test-startup-checks.sh` to validate these checks offline.
 
 1. Ensure you have `kubectl` configured to connect to your Kubernetes cluster.
