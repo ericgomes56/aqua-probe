@@ -3144,14 +3144,34 @@ host_ssh() {
         -o ControlMaster=no -o ControlPath=none "$AQUA_PROBE_HOST" "bash -c '$quoted'"
 }
 
+print_support_detail() {
+    local tone="$1" text="$2" width line
+    width=$(instruction_width)
+    while IFS= read -r line; do
+        print_colored_message "$tone" "  $line"
+    done < <(printf '%s\n' "$text" | fold -s -w "$((width - 4))")
+}
+
 print_host_os_requirements() {
     local platform="${1:-all}"
+    print_banner_rule
+    print_support_detail teal 'PLATFORM SUPPORT'
+    echo
     if [[ "$platform" == all || "$platform" == windows ]]; then
-        print_colored_message yellow 'Windows: Supported only on Windows Server 2019, Windows Server 2022, and Windows Server 2025. Please refer to the official Aqua system requirements documentation for an updated list.'
+        print_support_detail blue 'WINDOWS'
+        print_support_detail text 'Windows Server 2019 / Windows Server 2022 / Windows Server 2025'
+        print_support_detail yellow 'Server editions only.'
+        echo
     fi
     if [[ "$platform" == all || "$platform" == linux ]]; then
-        print_colored_message text 'Linux: Please refer to the official Aqua system requirements documentation for an updated list of supported distributions and versions.'
+        print_support_detail blue 'LINUX'
+        print_support_detail text 'Check supported distributions and versions in the official requirements.'
+        echo
     fi
+    print_support_detail teal 'LATEST REQUIREMENTS'
+    print_support_detail muted 'Please refer to the official Aqua system requirements documentation for an updated list of supported operating systems and versions.'
+    print_banner_rule
+    echo
 }
 
 select_ssh_host() {

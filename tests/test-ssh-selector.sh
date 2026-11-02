@@ -9,7 +9,15 @@ guidance=$(print_host_os_requirements)
 for version in 2019 2022 2025; do
     [[ "$guidance" == *"Windows Server $version"* ]] || fail 'Missing Windows support guidance'
 done
-[[ "$(print_host_os_requirements linux)" == 'Linux: Please refer to the official Aqua system requirements documentation for an updated list of supported distributions and versions.' ]] || fail 'Missing Linux support guidance'
+linux_guidance=$(print_host_os_requirements linux)
+[[ "$linux_guidance" == *'LINUX'* && "$linux_guidance" == *'supported distributions'* && "$linux_guidance" != *'WINDOWS'* ]] || fail 'Incorrect Linux support guidance'
+for width in 30 40 60 80 100; do
+    guidance=$(COLUMNS=$width print_host_os_requirements)
+    printf '%s\n' "$guidance" | awk -v w="$width" 'length > w {exit 1}' || fail 'Support block overflow'
+    [[ "$guidance" != *$'\033'* ]] || fail 'Plain support block contains ANSI escapes'
+    normalized=$(printf '%s\n' "$guidance" | tr '\n' ' ' | tr -s ' ')
+    [[ "$normalized" == *'official Aqua system requirements documentation'* ]] || fail 'Missing requirements reference'
+done
 configure_host_runtime() {
     AQUA_PROBE_HOST=linux-lab AQUA_PROBE_HOST_USER=linux-admin AQUA_PROBE_HOST_PORT=2222
     AQUA_PROBE_HOST_READY=1
