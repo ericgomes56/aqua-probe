@@ -189,17 +189,11 @@ The CLI initializes image and namespace defaults at startup. Use flags rather th
 | Resource | Purpose |
 | --- | --- |
 | [Control reference](docs/control-reference.md) | Full menu, policy instructions, host setup, platform differences, and evidence checks |
+| [PDF user guide](user-guide/Aqua-Probe_Userguide.pdf) | Illustrated setup, current menu, container and host workflows, Secure AI, and cleanup guidance; updated November 2, 2026 |
 | [Container image build guide](Dockerfile/README.md) | Dependencies, architecture selection, and troubleshooting |
 | [Source script](aqua-probe.sh) | Current commands, manifests, prompts, and cleanup behavior |
 | [Offline test suites](tests) | Mocked workflows, routing, cleanup, startup checks, and terminal formatting |
 | [Rebranding summary](SUMMARY_REPORT.md) | Historical migration notes |
-
-<details>
-<summary>Earlier PDF guide</summary>
-
-The [PDF user guide](user-guide/Aqua-Probe_Userguide.pdf) is retained for reference. It predates the current interface and may show older branding, image versions, menu numbers, or workflows. Use the current script and control reference for instructions. The updated [terminal screenshot and demo](#see-aqua-probe-in-action) are featured above.
-
-</details>
 
 ## Contributing and Support
 
